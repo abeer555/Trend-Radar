@@ -20,7 +20,7 @@ logging.basicConfig(
 )
 
 app = FastAPI(
-    title="Market Predictor — Momentum Dashboard",
+    title="TrendRadar — Momentum Dashboard",
     description=(
         "Rule-based swing-trading momentum screener. "
         "Educational tool only — NOT investment advice. "

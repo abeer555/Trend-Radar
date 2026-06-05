@@ -1,5 +1,5 @@
 """
-Central configuration for Market-Predictor.
+Central configuration for TrendRadar.
 
 Edit this file to change signal weights, universe, and thresholds without
 touching any other code. All values are read at import time; restart the

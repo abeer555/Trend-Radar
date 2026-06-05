@@ -1,4 +1,4 @@
-# Market Predictor — Momentum Dashboard
+# TrendRadar — Momentum Dashboard
 
 A free, rule-based swing-trading momentum screener inspired by SwingAlgo.
 **Educational tool only — not investment advice.**
