@@ -88,8 +88,20 @@ def compute_momentum(df: pd.DataFrame) -> MomentumResult:
     high_proximity = float(np.clip(high_proximity, 0.0, 1.0))
 
     # ── 1-day change ───────────────────────────────────────────────────────
+    # Stored as a *fraction* (e.g. 0.0123 = +1.23%), consistent with
+    # momentum_12_1. The frontend multiplies by 100 for display, so emitting a
+    # percent here would double-count (a real +5% would render as +500%).
+    #
+    # `closes` has already been dropna()'d, so a NULL latest row (yfinance can
+    # return a placeholder NaN close for the in-progress / non-trading session)
+    # is skipped and we compare the two most recent *valid* closes. We still
+    # null out implausible jumps (>50% in a day) that indicate a corrupt or
+    # mis-adjusted source row rather than fabricating a clamped value.
     if n >= 2:
-        pct_1d = (closes.iloc[-1] / closes.iloc[-2] - 1.0) * 100
+        prev_close = float(closes.iloc[-2])
+        pct_1d = (float(closes.iloc[-1]) / prev_close - 1.0) if prev_close else 0.0
+        if not np.isfinite(pct_1d) or abs(pct_1d) > 0.5:
+            pct_1d = float("nan")   # corrupt source data → emit null downstream
     else:
         pct_1d = 0.0
 
@@ -106,5 +118,6 @@ def compute_momentum(df: pd.DataFrame) -> MomentumResult:
         high_proximity_score = round(high_proximity * 100, 2),
         week52_high          = round(week52_high, 2),
         week52_low           = round(week52_low, 2),
-        pct_change_1d        = round(float(pct_1d), 4),
+        pct_change_1d        = (round(float(pct_1d), 6)
+                               if np.isfinite(pct_1d) else float("nan")),
     )

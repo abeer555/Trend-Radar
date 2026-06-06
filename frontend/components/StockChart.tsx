@@ -43,14 +43,14 @@ export default function StockChart({ chartData, ticker }: Props) {
         chart = createChart(el, {
           width:  el.clientWidth,
           height: 420,
-          layout: { background: { color: "#161a23" }, textColor: "#94a3b8" },
+          layout: { background: { color: "#11141c" }, textColor: "#7e8899" },
           grid: {
-            vertLines: { color: "#2a3040" },
-            horzLines: { color: "#2a3040" },
+            vertLines: { color: "#1a1f2b" },
+            horzLines: { color: "#1a1f2b" },
           },
           crosshair:  { mode: CrosshairMode.Normal },
-          rightPriceScale: { borderColor: "#2a3040" },
-          timeScale: { borderColor: "#2a3040", timeVisible: true },
+          rightPriceScale: { borderColor: "#232936" },
+          timeScale: { borderColor: "#232936", timeVisible: true },
         });
 
         // Candlestick series
@@ -120,25 +120,27 @@ export default function StockChart({ chartData, ticker }: Props) {
   return (
     <div className="flex flex-col gap-2">
       {/* Period selector */}
-      <div className="flex items-center gap-2">
-        {(["3M", "6M", "1Y"] as Period[]).map(p => (
-          <button
-            key={p}
-            onClick={() => setPeriod(p)}
-            className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
-              period === p
-                ? "bg-accent text-white"
-                : "bg-surface-2 text-muted hover:text-text"
-            }`}
-          >
-            {p}
-          </button>
-        ))}
-        <div className="ml-4 flex items-center gap-3 text-xs text-muted">
-          <span><span className="inline-block h-2 w-4 rounded bg-warn align-middle"/> MA50</span>
-          <span><span className="inline-block h-2 w-4 rounded bg-accent align-middle"/> MA150</span>
-          <span><span className="inline-block h-2 w-4 rounded bg-accent-2 align-middle"/> MA200</span>
-          <span><span className="inline-block h-2 w-4 rounded bg-accent-2/50 align-middle"/> BBands</span>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="inline-flex items-center rounded-md border border-border bg-surface-2 p-0.5">
+          {(["3M", "6M", "1Y"] as Period[]).map(p => (
+            <button
+              key={p}
+              onClick={() => setPeriod(p)}
+              className={`rounded-[5px] px-3 py-1 text-xs font-medium transition-colors ${
+                period === p
+                  ? "bg-accent text-white"
+                  : "text-muted hover:text-text"
+              }`}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+        <div className="ml-auto flex items-center gap-3 text-xs text-muted">
+          <span><span className="inline-block h-0.5 w-4 rounded bg-warn align-middle"/> MA50</span>
+          <span><span className="inline-block h-0.5 w-4 rounded bg-accent align-middle"/> MA150</span>
+          <span><span className="inline-block h-0.5 w-4 rounded bg-accent-2 align-middle"/> MA200</span>
+          <span><span className="inline-block h-0.5 w-4 rounded bg-accent-2/50 align-middle"/> BBands</span>
         </div>
       </div>
 

@@ -1,3 +1,4 @@
+import { BarChart3 } from "lucide-react";
 import { fetchLeaderboard, fetchSectors, fetchScanStatus } from "@/lib/api";
 import LeaderboardTable from "@/components/LeaderboardTable";
 import Disclaimer from "@/components/Disclaimer";
@@ -12,19 +13,36 @@ function ScanStatusBadge({ status }: { status: Record<string, unknown> }) {
 
   if (!s || s === "no_scan_run") {
     return (
-      <span className="rounded border border-warn/30 bg-warn/5 px-2 py-1 text-xs text-warn">
+      <span className="rounded-md border border-warn/30 bg-warn/5 px-2.5 py-1.5 text-xs text-warn">
         No scan run yet — trigger one via POST /api/scan
       </span>
     );
   }
 
+  const ok = s.startsWith("completed");
+
   return (
-    <div className="flex flex-wrap items-center gap-3 text-xs text-muted">
-      <span className={s.startsWith("completed") ? "text-bull" : "text-warn"}>
-        ● {s}
+    <div className="flex items-center gap-3 rounded-md border border-border bg-surface px-3 py-2 text-xs text-muted">
+      <span className="flex items-center gap-1.5">
+        <span className={ok ? "h-1.5 w-1.5 rounded-full bg-bull" : "h-1.5 w-1.5 rounded-full bg-warn"} />
+        <span className="font-medium capitalize text-text-dim">{s.replace(/_/g, " ")}</span>
       </span>
-      {n != null && <span>{n} tickers scanned</span>}
-      {dt && <span>Last run: {new Date(dt as string).toLocaleString()}</span>}
+      {n != null && (
+        <>
+          <span className="h-3 w-px bg-border" />
+          <span><span className="tabular-nums text-text-dim">{n}</span> tickers</span>
+        </>
+      )}
+      {dt && (
+        <>
+          <span className="h-3 w-px bg-border" />
+          <span>
+            {new Date(dt).toLocaleString("en-IN", {
+              day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
+            })}
+          </span>
+        </>
+      )}
     </div>
   );
 }
@@ -36,19 +54,21 @@ export default async function LeaderboardPage() {
     fetchScanStatus(),
   ]);
 
-  const leaderboard = rows.status === "fulfilled"    ? rows.value    : [];
-  const sectorList  = sectors.status === "fulfilled" ? sectors.value : [];
+  const leaderboard = rows.status === "fulfilled"       ? rows.value    : [];
+  const sectorList  = sectors.status === "fulfilled"    ? sectors.value : [];
   const scan        = scanStatus.status === "fulfilled" ? scanStatus.value : {};
 
   const isEmpty = leaderboard.length === 0;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5">
       {/* Header */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-text">Momentum Leaderboard</h1>
-          <p className="text-sm text-muted">
+          <h1 className="text-2xl font-semibold tracking-tight text-text">
+            Momentum Leaderboard
+          </h1>
+          <p className="mt-0.5 text-sm text-muted">
             Rule-based composite momentum ranking of Nifty 500 stocks.
             Updated daily after market close.
           </p>
@@ -60,7 +80,7 @@ export default async function LeaderboardPage() {
 
       {isEmpty ? (
         <div className="flex flex-col items-center gap-4 rounded-xl border border-border bg-surface py-20 text-center">
-          <span className="text-4xl">📊</span>
+          <BarChart3 className="h-10 w-10 text-muted" />
           <div>
             <p className="text-lg font-semibold">No data yet</p>
             <p className="mt-1 text-sm text-muted">

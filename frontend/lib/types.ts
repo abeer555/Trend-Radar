@@ -105,10 +105,12 @@ export interface TopFactor {
 }
 
 export interface EntrySignal {
-  label:       "Breakout" | "Setup forming" | "Watch" | "No setup";
-  reason:      string;
-  entry:       string;
-  disclaimer:  string;
+  label:          "Breakout" | "Extended" | "Setup forming" | "Watch" | "No setup";
+  reason:         string;
+  entry:          string;
+  disclaimer:     string;
+  pivot?:         number | null;
+  pivot_cleared?: boolean;
 }
 
 export interface ChartCandle {

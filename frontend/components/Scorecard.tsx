@@ -1,3 +1,4 @@
+import clsx from "clsx";
 import type { StockDetail } from "@/lib/types";
 
 interface Props { stock: StockDetail; }
@@ -16,15 +17,15 @@ function Row({ label, value, read, sentiment }: {
   }[sentiment ?? "undefined"];
 
   return (
-    <div className="flex flex-col gap-1 rounded-lg border border-border bg-surface p-3">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wider text-muted">{label}</span>
-        <span className="font-mono text-sm font-semibold">{value}</span>
+    <div className="flex items-center justify-between gap-4 border-b border-border/60 py-3 last:border-0">
+      <div className="flex min-w-0 items-start gap-2.5">
+        <span className={clsx("mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full", dotColor)} />
+        <div className="min-w-0">
+          <div className="text-sm font-medium text-text">{label}</div>
+          <div className="text-xs leading-relaxed text-muted">{read}</div>
+        </div>
       </div>
-      <div className="flex items-start gap-1.5 text-xs text-text-dim">
-        <span className={`mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full ${dotColor}`} />
-        <span>{read}</span>
-      </div>
+      <span className="flex-shrink-0 font-mono text-sm font-semibold tabular-nums">{value}</span>
     </div>
   );
 }
@@ -43,7 +44,7 @@ function macdSentiment(macd: number | null, signal: number | null): "bull" | "be
 
 export default function Scorecard({ stock }: Props) {
   return (
-    <div className="flex flex-col gap-3">
+    <div className="rounded-lg border border-border bg-surface px-4">
       <Row
         label="RSI (14)"
         value={stock.rsi != null ? stock.rsi.toFixed(1) : "—"}

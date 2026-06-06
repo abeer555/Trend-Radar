@@ -286,8 +286,25 @@ def _entry_signal(row: dict) -> dict:
     vcp   = row.get("vcp_detected") or False
     rs    = row.get("rs_rank") or 0
     pivot = row.get("vcp_pivot")
+    price = row.get("last_price")
 
-    if vcp and tt and rs >= 70:
+    # A VCP pivot is only an actionable buy-point while price is still at/below
+    # it. If price has already pushed above the pivot, the base has broken out
+    # (or the detected base is stale) — telling the user to "buy above pivot"
+    # below the current price is misleading. Detect that case explicitly.
+    pivot_cleared = (
+        vcp and pivot is not None and price is not None and float(price) > float(pivot)
+    )
+
+    if pivot_cleared and tt and rs >= 70:
+        label  = "Extended"
+        reason = (
+            f"VCP base pivot ({pivot}) is already cleared — price ({price}) is "
+            "trading above the entry. The breakout has occurred; chasing here "
+            "means buying extended. Wait for a new base or a pullback toward the pivot."
+        )
+        entry  = f"Pivot already cleared — extended above entry ({pivot}). Avoid chasing."
+    elif vcp and tt and rs >= 70:
         label  = "Breakout"
         reason = "VCP setup + Trend Template pass + RS ≥ 70. Watch for volume breakout above pivot."
         entry  = f"Buy above pivot: {pivot}" if pivot else "Watch for volume breakout above base high."
@@ -308,6 +325,10 @@ def _entry_signal(row: dict) -> dict:
         "label":  label,
         "reason": reason,
         "entry":  entry,
+        # Surfaced so consumers can render the pivot as informational (already
+        # cleared) rather than as an actionable buy trigger.
+        "pivot":          pivot,
+        "pivot_cleared":  pivot_cleared,
         "disclaimer": (
             "This is an educational signal based on historical patterns. "
             "It is NOT investment advice. Past patterns do not guarantee future results."

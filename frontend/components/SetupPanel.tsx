@@ -1,24 +1,27 @@
+import { Check, X, Minus, CircleHelp } from "lucide-react";
 import clsx from "clsx";
 import type { StockDetail } from "@/lib/types";
+import { fmtINR, fmtPct } from "@/lib/format";
 
 interface Props { stock: StockDetail; }
 
-function Check({ pass }: { pass: boolean | null }) {
-  if (pass === null) return <span className="text-muted">?</span>;
+function CheckIcon({ pass }: { pass: boolean | null }) {
+  if (pass === null) return <CircleHelp className="h-3.5 w-3.5 text-muted" />;
   return pass
-    ? <span className="text-bull">✓</span>
-    : <span className="text-bear">✗</span>;
+    ? <Check className="h-3.5 w-3.5 text-bull" strokeWidth={2.5} />
+    : <X className="h-3.5 w-3.5 text-bear" strokeWidth={2.5} />;
 }
 
 function SignalBadge({ label }: { label: string }) {
   const colors: Record<string, string> = {
-    "Breakout":      "border-bull text-bull bg-bull/10",
-    "Setup forming": "border-accent text-accent bg-accent/10",
-    "Watch":         "border-warn text-warn bg-warn/10",
+    "Breakout":      "border-bull/50 text-bull bg-bull/10",
+    "Extended":      "border-warn/50 text-warn bg-warn/10",
+    "Setup forming": "border-accent/50 text-accent bg-accent/10",
+    "Watch":         "border-warn/50 text-warn bg-warn/10",
     "No setup":      "border-border text-muted bg-white/5",
   };
   return (
-    <span className={clsx("rounded border px-2 py-0.5 text-xs font-semibold", colors[label] ?? colors["No setup"])}>
+    <span className={clsx("rounded-md border px-2 py-0.5 text-xs font-semibold", colors[label] ?? colors["No setup"])}>
       {label}
     </span>
   );
@@ -27,6 +30,16 @@ function SignalBadge({ label }: { label: string }) {
 export default function SetupPanel({ stock }: Props) {
   const tt  = stock.trend_template_criteria ?? {};
   const sig = stock.entry_signal;
+
+  const pivotCleared =
+    stock.vcp_pivot != null &&
+    stock.last_price != null &&
+    stock.last_price > stock.vcp_pivot;
+
+  const pivotDistance =
+    pivotCleared && stock.vcp_pivot
+      ? stock.last_price! / stock.vcp_pivot - 1
+      : null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -48,18 +61,18 @@ export default function SetupPanel({ stock }: Props) {
         <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted">
           Minervini Trend Template
         </h3>
-        <ul className="space-y-1.5">
+        <ul className="space-y-2">
           {Object.entries(tt).map(([criterion, pass]) => (
-            <li key={criterion} className="flex items-center gap-2 text-sm">
-              <Check pass={pass as boolean | null} />
-              <span className={clsx(pass === true ? "text-text" : pass === false ? "text-muted" : "text-muted")}>
+            <li key={criterion} className="flex items-center gap-2.5 text-sm">
+              <CheckIcon pass={pass as boolean | null} />
+              <span className={pass === true ? "text-text" : "text-muted"}>
                 {criterion}
               </span>
             </li>
           ))}
         </ul>
-        <div className="mt-2 flex items-center gap-2 border-t border-border pt-2">
-          <Check pass={stock.trend_template_pass} />
+        <div className="mt-3 flex items-center gap-2.5 border-t border-border pt-3">
+          <CheckIcon pass={stock.trend_template_pass} />
           <span className="text-sm font-medium">
             {stock.trend_template_pass ? "All criteria met" : "Some criteria not met"}
           </span>
@@ -68,29 +81,48 @@ export default function SetupPanel({ stock }: Props) {
 
       {/* VCP */}
       <div className="rounded-lg border border-border bg-surface p-4">
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
+        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted">
           Volatility Contraction Pattern (VCP)
         </h3>
-        <div className="flex flex-wrap gap-4 text-sm">
-          <div>
-            <span className="text-muted">Detected: </span>
-            <Check pass={stock.vcp_detected ?? false} />
-            <span className="ml-1">{stock.vcp_detected ? "Yes" : "No"}</span>
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+          <div className="flex items-center gap-1.5">
+            <span className="text-muted">Detected:</span>
+            <CheckIcon pass={stock.vcp_detected ?? false} />
+            <span>{stock.vcp_detected ? "Yes" : "No"}</span>
           </div>
           {stock.vcp_contractions != null && (
             <div>
               <span className="text-muted">Contractions: </span>
-              <span className="font-mono font-semibold">{stock.vcp_contractions}</span>
+              <span className="font-mono font-semibold tabular-nums">{stock.vcp_contractions}</span>
             </div>
           )}
           {stock.vcp_pivot != null && (
-            <div>
+            <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-muted">Pivot level: </span>
-              <span className="font-mono font-semibold text-bull">₹{stock.vcp_pivot.toFixed(2)}</span>
-              <span className="ml-1 text-xs text-muted">(potential entry above this level on volume)</span>
+              <span className={clsx(
+                "font-mono font-semibold tabular-nums",
+                pivotCleared ? "text-text" : "text-bull"
+              )}>
+                ₹{fmtINR(stock.vcp_pivot)}
+              </span>
+              {pivotCleared ? (
+                <span className="badge badge-warn">
+                  Cleared — {fmtPct(pivotDistance, 0, false)} above entry
+                </span>
+              ) : (
+                <span className="text-xs text-muted">
+                  (potential entry above this level on volume)
+                </span>
+              )}
             </div>
           )}
         </div>
+        {pivotCleared && (
+          <p className="mt-2 text-xs text-warn/80">
+            Price has already cleared the pivot — the stock is extended above the
+            reference entry. Chasing extended moves carries higher risk.
+          </p>
+        )}
       </div>
 
       {/* Other setups */}
@@ -122,10 +154,19 @@ function SetupCard({ title, active, desc }: { title: string; active: boolean; de
       active ? "border-bull/30 bg-bull/5" : "border-border bg-surface"
     )}>
       <div className="mb-1 flex items-center gap-1.5">
-        <span className={active ? "text-bull" : "text-bear"}>{active ? "✓" : "✗"}</span>
-        <span className="text-sm font-medium">{title}</span>
+        {active
+          ? <Check className="h-3.5 w-3.5 text-bull" strokeWidth={2.5} />
+          : <Minus className="h-3.5 w-3.5 text-muted" />}
+        <span className={clsx("text-sm font-medium", active ? "text-text" : "text-text-dim")}>
+          {title}
+        </span>
+        {!active && (
+          <span className="ml-auto text-[10px] font-medium uppercase tracking-wider text-muted">
+            Not present
+          </span>
+        )}
       </div>
-      <p className="text-xs text-muted">{desc}</p>
+      <p className="text-xs leading-relaxed text-muted">{desc}</p>
     </div>
   );
 }

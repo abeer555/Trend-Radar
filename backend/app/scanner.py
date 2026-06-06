@@ -244,7 +244,9 @@ def _scan_single(
         "industry":  industry,
 
         "last_price":    round(current_price, 2),
-        "pct_change_1d": round(mom.pct_change_1d, 4),
+        # Fraction (e.g. 0.0123 = +1.23%); None when source data is corrupt.
+        "pct_change_1d": (round(mom.pct_change_1d, 6)
+                          if not np.isnan(mom.pct_change_1d) else None),
         "week52_high":   mom.week52_high,
         "week52_low":    mom.week52_low,
 
