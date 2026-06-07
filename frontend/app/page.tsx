@@ -1,5 +1,6 @@
-import { BarChart3 } from "lucide-react";
+import { BarChart3, Layers, ListChecks, Target, Flame } from "lucide-react";
 import { fetchLeaderboard, fetchSectors, fetchScanStatus } from "@/lib/api";
+import type { LeaderboardRow } from "@/lib/types";
 import LeaderboardTable from "@/components/LeaderboardTable";
 import Disclaimer from "@/components/Disclaimer";
 
@@ -47,9 +48,53 @@ function ScanStatusBadge({ status }: { status: Record<string, unknown> }) {
   );
 }
 
+function StatCard({
+  icon: Icon, value, label, tint,
+}: {
+  icon:  React.ComponentType<{ className?: string }>;
+  value: React.ReactNode;
+  label: string;
+  tint:  string;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-3">
+      <span className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md ${tint}`}>
+        <Icon className="h-[18px] w-[18px]" />
+      </span>
+      <div className="min-w-0">
+        <div className="truncate text-lg font-semibold leading-tight tabular-nums text-text">
+          {value}
+        </div>
+        <div className="truncate text-xs text-muted">{label}</div>
+      </div>
+    </div>
+  );
+}
+
+function StatsStrip({ rows }: { rows: LeaderboardRow[] }) {
+  const tt  = rows.filter(r => !!r.trend_template_pass).length;
+  const vcp = rows.filter(r => !!r.vcp_detected).length;
+
+  // Most common sector among the top 50 ranked stocks
+  const counts = new Map<string, number>();
+  for (const r of rows.slice(0, 50)) {
+    if (r.sector) counts.set(r.sector, (counts.get(r.sector) ?? 0) + 1);
+  }
+  const hotSector = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—";
+
+  return (
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <StatCard icon={Layers}     value={rows.length} label="Stocks ranked"          tint="bg-accent/10 text-accent" />
+      <StatCard icon={ListChecks} value={tt}          label="Pass Trend Template"    tint="bg-bull/10 text-bull" />
+      <StatCard icon={Target}     value={vcp}         label="VCP setups detected"    tint="bg-accent-2/10 text-accent-2" />
+      <StatCard icon={Flame}      value={hotSector}   label="Hot sector (top 50)"    tint="bg-warn/10 text-warn" />
+    </div>
+  );
+}
+
 export default async function LeaderboardPage() {
   const [rows, sectors, scanStatus] = await Promise.allSettled([
-    fetchLeaderboard({ limit: 200 }),
+    fetchLeaderboard({ limit: 500 }),
     fetchSectors(),
     fetchScanStatus(),
   ]);
@@ -63,7 +108,7 @@ export default async function LeaderboardPage() {
   return (
     <div className="flex flex-col gap-5">
       {/* Header */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+      <div className="fade-up flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-text">
             Momentum Leaderboard
@@ -76,7 +121,15 @@ export default async function LeaderboardPage() {
         <ScanStatusBadge status={scan} />
       </div>
 
-      <Disclaimer />
+      <div className="fade-up">
+        <Disclaimer />
+      </div>
+
+      {!isEmpty && (
+        <div className="fade-up fade-up-1">
+          <StatsStrip rows={leaderboard} />
+        </div>
+      )}
 
       {isEmpty ? (
         <div className="flex flex-col items-center gap-4 rounded-xl border border-border bg-surface py-20 text-center">

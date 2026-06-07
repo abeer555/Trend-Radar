@@ -53,7 +53,7 @@ export default async function StockDetailPage({ params }: PageProps) {
       </nav>
 
       {/* Hero stat strip */}
-      <div className="overflow-hidden rounded-xl border border-border bg-surface">
+      <div className="fade-up overflow-hidden rounded-xl border border-border bg-surface">
         <div className="flex flex-col gap-1 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:gap-3">
           <h1 className="font-mono text-xl font-semibold tracking-tight text-text">{ticker}</h1>
           <span className="w-fit rounded-full border border-border px-2 py-0.5 text-xs text-text-dim">
@@ -121,7 +121,7 @@ export default async function StockDetailPage({ params }: PageProps) {
       <Disclaimer />
 
       {/* Chart */}
-      <div className="rounded-xl border border-border bg-surface p-5">
+      <div className="fade-up fade-up-1 rounded-xl border border-border bg-surface p-5">
         <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted">Price Chart</h2>
         <StockChart chartData={chartData} ticker={ticker} />
       </div>

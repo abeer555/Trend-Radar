@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import clsx from "clsx";
 import type { ChartData } from "@/lib/types";
 
 interface Props {
@@ -9,6 +10,7 @@ interface Props {
 }
 
 type Period = "3M" | "6M" | "1Y";
+type SeriesKey = "ma50" | "ma150" | "ma200" | "bb";
 
 const PERIOD_DAYS: Record<Period, number> = { "3M": 63, "6M": 126, "1Y": 252 };
 
@@ -19,13 +21,32 @@ function filterCandlesLast(arr: { time: string; open: number; high: number; low:
   return arr.slice(-n);
 }
 
+type ToggleSeries = ReturnType<ReturnType<typeof import("lightweight-charts")["createChart"]>["addLineSeries"]>;
+
 export default function StockChart({ chartData, ticker }: Props) {
   const chartRef  = useRef<HTMLDivElement>(null);
+  const seriesRef = useRef<Partial<Record<SeriesKey, ToggleSeries[]>>>({});
   const [period, setPeriod] = useState<Period>("1Y");
   const [loaded, setLoaded] = useState(false);
   const [error, setError]   = useState<string | null>(null);
+  const [visible, setVisible] = useState<Record<SeriesKey, boolean>>({
+    ma50: true, ma150: true, ma200: true, bb: true,
+  });
 
   const days = PERIOD_DAYS[period];
+
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
+
+  function toggle(key: SeriesKey) {
+    setVisible(v => {
+      const next = !v[key];
+      for (const s of seriesRef.current[key] ?? []) {
+        try { s.applyOptions({ visible: next }); } catch {}
+      }
+      return { ...v, [key]: next };
+    });
+  }
 
   useEffect(() => {
     if (!chartRef.current || !chartData?.candles?.length) return;
@@ -64,21 +85,28 @@ export default function StockChart({ chartData, ticker }: Props) {
         });
         candleSeries.setData(filterCandlesLast(chartData.candles, days) as Parameters<typeof candleSeries.setData>[0]);
 
+        const vis = visibleRef.current;
+        const refs: Partial<Record<SeriesKey, ToggleSeries[]>> = {};
+
         // MA lines
-        const maColors: Record<string, string> = {
-          ma50: "#f59e0b", ma150: "#3b82f6", ma200: "#8b5cf6",
+        const maColors: Record<SeriesKey, string> = {
+          ma50: "#f59e0b", ma150: "#3b82f6", ma200: "#8b5cf6", bb: "",
         };
-        for (const [key, color] of Object.entries(maColors)) {
-          const lineSeries = chart.addLineSeries({ color, lineWidth: 1, priceLineVisible: false });
+        for (const key of ["ma50", "ma150", "ma200"] as SeriesKey[]) {
+          const lineSeries = chart.addLineSeries({ color: maColors[key], lineWidth: 1, priceLineVisible: false, visible: vis[key] });
           const data = filterLast((chartData as unknown as Record<string, {time:string; value:number|null}[]>)[key] ?? [], days);
           lineSeries.setData(data.filter(p => p.value != null) as Parameters<typeof lineSeries.setData>[0]);
+          refs[key] = [lineSeries];
         }
 
         // Bollinger Bands
-        const bbUpper = chart.addLineSeries({ color: "#6366f180", lineWidth: 1, lineStyle: 2, priceLineVisible: false });
-        const bbLower = chart.addLineSeries({ color: "#6366f180", lineWidth: 1, lineStyle: 2, priceLineVisible: false });
+        const bbUpper = chart.addLineSeries({ color: "#6366f180", lineWidth: 1, lineStyle: 2, priceLineVisible: false, visible: vis.bb });
+        const bbLower = chart.addLineSeries({ color: "#6366f180", lineWidth: 1, lineStyle: 2, priceLineVisible: false, visible: vis.bb });
         bbUpper.setData(filterLast(chartData.bb_upper, days).filter(p => p.value != null) as Parameters<typeof bbUpper.setData>[0]);
         bbLower.setData(filterLast(chartData.bb_lower, days).filter(p => p.value != null) as Parameters<typeof bbLower.setData>[0]);
+        refs.bb = [bbUpper, bbLower];
+
+        seriesRef.current = refs;
 
         // Volume histogram
         const volSeries = chart.addHistogramSeries({
@@ -111,6 +139,7 @@ export default function StockChart({ chartData, ticker }: Props) {
     return () => {
       disposed = true;
       ro?.disconnect();
+      seriesRef.current = {};
       chart?.remove();
       chart = null;
     };
@@ -137,10 +166,25 @@ export default function StockChart({ chartData, ticker }: Props) {
           ))}
         </div>
         <div className="ml-auto flex items-center gap-3 text-xs text-muted">
-          <span><span className="inline-block h-0.5 w-4 rounded bg-warn align-middle"/> MA50</span>
-          <span><span className="inline-block h-0.5 w-4 rounded bg-accent align-middle"/> MA150</span>
-          <span><span className="inline-block h-0.5 w-4 rounded bg-accent-2 align-middle"/> MA200</span>
-          <span><span className="inline-block h-0.5 w-4 rounded bg-accent-2/50 align-middle"/> BBands</span>
+          {([
+            { key: "ma50",  label: "MA50",   swatch: "bg-warn"        },
+            { key: "ma150", label: "MA150",  swatch: "bg-accent"      },
+            { key: "ma200", label: "MA200",  swatch: "bg-accent-2"    },
+            { key: "bb",    label: "BBands", swatch: "bg-accent-2/50" },
+          ] as { key: SeriesKey; label: string; swatch: string }[]).map(({ key, label, swatch }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => toggle(key)}
+              title={`Toggle ${label}`}
+              className={clsx(
+                "inline-flex items-center transition-opacity hover:opacity-100",
+                visible[key] ? "opacity-100" : "opacity-40",
+              )}
+            >
+              <span className={clsx("inline-block h-0.5 w-4 rounded align-middle", swatch)} /> {label}
+            </button>
+          ))}
         </div>
       </div>
 

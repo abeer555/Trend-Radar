@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import { Github } from "lucide-react";
+import CommandPalette from "@/components/CommandPalette";
 import "./globals.css";
 
 const plexSans = IBM_Plex_Sans({
@@ -50,12 +51,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 Momentum
               </span>
             </a>
-            <div className="flex items-center gap-1 text-sm">
+            <div className="flex items-center gap-2 text-sm">
+              <CommandPalette />
               <a
                 href="/"
                 className="rounded-md px-3 py-1.5 text-text-dim transition-colors hover:bg-surface-2 hover:text-text"
               >
                 Leaderboard
+              </a>
+              <a
+                href="/docs"
+                className="rounded-md px-3 py-1.5 text-text-dim transition-colors hover:bg-surface-2 hover:text-text"
+              >
+                Docs
               </a>
               <a
                 href={REPO_URL}
