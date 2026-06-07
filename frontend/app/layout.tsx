@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import { Github } from "lucide-react";
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import CommandPalette from "@/components/CommandPalette";
 import "./globals.css";
 
@@ -79,6 +81,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </nav>
 
         <main className="mx-auto w-full max-w-screen-2xl flex-1 px-4 py-6">{children}</main>
+        <Analytics />
+        <SpeedInsights />
 
         <footer className="mt-12 border-t border-border">
           <div className="mx-auto w-full max-w-screen-2xl px-4 py-8 text-xs leading-relaxed text-muted">
