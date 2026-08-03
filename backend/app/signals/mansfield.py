@@ -7,7 +7,7 @@ Stage classification:
   Stage 3 — Topping   : price rolling over near the 30-week MA.
   Stage 4 — Declining : price below a falling 30-week MA.
 
-Mansfield RS = ((Stock / Benchmark) / 52-week-ago ratio) - 1
+Mansfield RS = ((Stock / Benchmark) / 52-week-ago (Stock / Benchmark)) - 1
 Positive Mansfield RS → outperforming benchmark over 52 weeks.
 """
 
@@ -73,30 +73,49 @@ def compute_mansfield(
         return _null
 
     ma = stock.rolling(ma_period_td).mean()
+    if ma.dropna().empty:
+        return _null  # 30-week MA can't be computed at all
     current_price = float(stock.iloc[-1])
     current_ma    = float(ma.iloc[-1])
-    prev_ma       = float(ma.iloc[-22]) if len(ma) >= 22 else current_ma  # 1 month ago
+
+    # "MA 1 month ago" — only meaningful if the MA has at least 22 non-NaN
+    # values.  With ma_period_td=150, the first ~149 entries are NaN, so a
+    # stock with exactly 150-171 bars of history has current_ma but NO 22-day-
+    # ago MA; treating them as equal silently blocks Stage-2 classification
+    # (the old `ma.iloc[-22] if len(ma) >= 22 else current_ma` bug).
+    MANSFIELD_PREV_MA_LOOKBACK = 22
+    ma_valid = ma.dropna()
+    if len(ma_valid) >= MANSFIELD_PREV_MA_LOOKBACK + 1:
+        prev_ma = float(ma_valid.iloc[-(MANSFIELD_PREV_MA_LOOKBACK + 1)])
+    else:
+        prev_ma = None  # insufficient history to assess MA slope
 
     # ── Stage classification ──────────────────────────────────────────────
-    ma_rising   = current_ma > prev_ma
+    # When prev_ma is unknown (young series), don't block stage 2 — require only
+    # "price above a *flat-or-rising* 30-week MA", i.e. don't require a slope we
+    # can't measure.  This previously forced stage → 1/3 for 150–171 bar stocks.
+    ma_rising   = (current_ma > prev_ma) if prev_ma is not None else None
     above_ma    = current_price > current_ma
 
-    if above_ma and ma_rising:
+    if above_ma and (ma_rising is True or ma_rising is None):
         stage = 2   # Advancing — the one we want
-    elif not above_ma and not ma_rising:
+    elif not above_ma and ma_rising is False:
         stage = 4   # Declining
-    elif above_ma and not ma_rising:
+    elif above_ma and ma_rising is False:
         stage = 3   # Topping
     else:
         stage = 1   # Basing
 
     # ── Mansfield RS ─────────────────────────────────────────────────────
-    # Compare 52-week return of stock vs benchmark
+    # Canonical formulation: ratio of (stock/bench) today vs the same ratio
+    # ~52 trading weeks ago — NOT the arithmetic difference of returns.
+    # ratio_now/ratio_then - 1 == (1+stock_ret)/(1+bench_ret) - 1, which is the
+    # "excess return" an investor sees from holding stock vs. index.
     lookback = 252
     if len(stock) >= lookback and len(bench) >= lookback:
-        stock_ret = (stock.iloc[-1] / stock.iloc[-lookback]) - 1.0
-        bench_ret = (bench.iloc[-1] / bench.iloc[-lookback]) - 1.0
-        mansfield_rs = stock_ret - bench_ret
+        ratio_now  = stock.iloc[-1]        / bench.iloc[-1]
+        ratio_then = stock.iloc[-lookback] / bench.iloc[-lookback]
+        mansfield_rs = (ratio_now / ratio_then) - 1.0 if ratio_then else 0.0
     else:
         mansfield_rs = 0.0
 

@@ -59,36 +59,47 @@ def _make_flat_df(n: int = 380) -> pd.DataFrame:
 
 def _make_vcp_df() -> pd.DataFrame:
     """
-    Hand-crafted VCP pattern:
+    Hand-crafted VCP pattern with *smooth* contractions so swing detection
+    (window=5) uniquely identifies each stage's high/low pair:
     - Long uptrend
     - Three contractions of decreasing depth (15%, 10%, 5%)
-    - Volume drying up
+    - Volume drying up *throughout* each contraction
     """
     n_trend = 200
-    rng_trend = pd.date_range("2022-01-01", periods=n_trend, freq="B")
-    closes_trend = 100 * np.cumprod(1 + 0.002 + np.random.randn(n_trend) * 0.008)
+    rng = np.random.default_rng(7)
+    closes_trend = 100 * np.cumprod(1 + 0.002 + rng.normal(0, 0.008, n_trend))
 
-    def _contraction(start, depth, n_bars, vol_factor):
-        peak = start
+    def _contraction(start, depth, n_bars, vol_start_m, vol_end_m):
+        """Smooth down-up arc (less wiggle than noise → unique swings) + linear volume ramp."""
+        peak  = start
         trough = peak * (1 - depth)
-        c = np.linspace(peak, trough, n_bars // 2)
-        c = np.concatenate([c, np.linspace(trough, peak * 0.99, n_bars // 2)])
-        v = np.ones(n_bars) * vol_factor * 1_000_000
+        half  = n_bars // 2
+        down  = np.linspace(peak, trough, half, endpoint=False)
+        up    = np.linspace(trough, peak * 0.99, n_bars - half)
+        c = np.concatenate([down, up])
+        # High-frequency wobble: keeps swings discrete but is rejected by the
+        # ±5-bar swing window, so each stage yields exactly ONE swing high and
+        # ONE swing low.  (Low-frequency wobble would create duplicate peaks
+        # near each true peak, which is what we want to avoid.)
+        c = c * (1 + 0.002 * np.sin(np.linspace(0, 8 * np.pi, n_bars)))
+        v = np.linspace(vol_start_m, vol_end_m, n_bars) * 1_000_000
         return c, v
 
-    c1, v1 = _contraction(closes_trend[-1], 0.15, 30, 3.0)
-    c2, v2 = _contraction(c1[-1],           0.10, 20, 2.0)
-    c3, v3 = _contraction(c2[-1],           0.05, 10, 0.8)
+    c1, v1 = _contraction(closes_trend[-1], 0.15, 30, 3.0, 1.5)
+    c2, v2 = _contraction(c1[-1],           0.10, 22, 1.8, 0.9)
+    c3, v3 = _contraction(c2[-1],           0.05, 14, 1.0, 0.4)
 
     closes  = np.concatenate([closes_trend, c1, c2, c3])
-    volumes = np.concatenate([np.ones(n_trend) * 2_000_000, v1, v2, v3])
+    volumes = np.concatenate([np.full(n_trend, 4_000_000.0), v1, v2, v3])
     n_total = len(closes)
-    rng = pd.date_range("2022-01-01", periods=n_total, freq="B")
-    highs = closes * 1.005
-    lows  = closes * 0.995
+    rng_dt  = pd.date_range("2022-01-01", periods=n_total, freq="B")
+    # Keep intra-day spread tighter than inter-stage swings so the swing
+    # detection finds stage-boundary highs/lows, not noise.
+    highs = closes * 1.002
+    lows  = closes * 0.998
     return pd.DataFrame(
         {"Open": closes, "High": highs, "Low": lows, "Close": closes, "Volume": volumes},
-        index=rng,
+        index=rng_dt,
     )
 
 
@@ -398,6 +409,71 @@ class TestComposite:
         top_keys = [f["key"] for f in res.top_factors]
         # rs_rank (weight 0.25) and trend_template (weight 0.20) should dominate
         assert "rs_rank" in top_keys or "trend_template" in top_keys
+
+
+# ---------------------------------------------------------------------------
+# Database crash-safety (new in Phase 1)
+# ---------------------------------------------------------------------------
+
+class TestDatabaseRecovery:
+    def _fresh_engine(self):
+        import tempfile, os
+        from sqlalchemy import create_engine
+        from app.database import metadata, _enable_wal
+        tmp = tempfile.mktemp(suffix=".db")
+        e = create_engine(f"sqlite:///{tmp}", connect_args={"check_same_thread": False})
+        _enable_wal(e)
+        metadata.create_all(e)
+        self._tmp = tmp
+        return e
+
+    def teardown_method(self):
+        import os
+        if hasattr(self, "_tmp") and os.path.exists(self._tmp):
+            for suffix in ("", "-wal", "-shm"):
+                try: os.remove(self._tmp + suffix)
+                except OSError: pass
+
+    def test_recover_stale_running_scans_marks_failed(self):
+        from sqlalchemy import text
+        from app.database import recover_stale_running_scans, get_last_scan_status
+        e = self._fresh_engine()
+        with e.connect() as conn:
+            conn.execute(text(
+                "INSERT INTO scan_log (started_at, status) VALUES (datetime('now'), 'running')"
+            ))
+            conn.commit()
+        n = recover_stale_running_scans(e)
+        assert n == 1
+        last = get_last_scan_status(e)
+        assert last["status"] == "failed"
+        assert "interrupted" in (last["error_message"] or "")
+
+    def test_recover_ignores_completed_scans(self):
+        from sqlalchemy import text
+        from app.database import recover_stale_running_scans
+        e = self._fresh_engine()
+        with e.connect() as conn:
+            conn.execute(text(
+                "INSERT INTO scan_log (started_at, finished_at, status) "
+                "VALUES (datetime('now'), datetime('now'), 'completed')"
+            ))
+            conn.commit()
+        assert recover_stale_running_scans(e) == 0
+
+    def test_latest_completed_scan_age(self):
+        from sqlalchemy import text
+        from app.database import latest_completed_scan_age_hours
+        e = self._fresh_engine()
+        assert latest_completed_scan_age_hours(e) is None  # no completed scan
+        with e.connect() as conn:
+            conn.execute(text(
+                "INSERT INTO scan_log (started_at, finished_at, status) "
+                "VALUES (datetime('now','-2 hours'), datetime('now','-1 hours'), 'completed')"
+            ))
+            conn.commit()
+        age = latest_completed_scan_age_hours(e)
+        assert age is not None and 0.9 < age < 1.2  # ~1 hour old
 
 
 if __name__ == "__main__":

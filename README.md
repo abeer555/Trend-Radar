@@ -23,34 +23,61 @@ Data flows: yfinance → SQLite cache → API → Next.js (SSR).
 
 ## Quick start
 
-### 1. Backend
+### Option A — Local laptop (recommended for occasional use)
+
+The backend is designed to be **run for ~5 minutes then closed**.  When you
+boot it, it auto-detects missing or stale data and starts a scan in the
+background.  When you Ctrl+C, the DB stays consistent (orphan "running" scan
+rows are auto-recovered on next boot).
 
 ```bash
 cd backend
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# Start the API server
+# Start the API server — scans automatically if data is stale
+uvicorn app.main:app --port 8000
+```
+
+Open http://localhost:8000/api/scan/status to watch progress.  Once
+`is_running: false`, the dashboard is populated.  Ctrl+C to close; re-run
+`uvicorn` whenever you want fresher data.
+
+### Making the Vercel frontend talk to your laptop backend
+
+While the backend runs on your laptop, tunnel it:
+
+```bash
+cloudflared tunnel --url http://localhost:8000        # or: ngrok http 8000
+```
+
+Copy the `https://…trycloudflare.com` URL (or ngrok URL), then in your
+Vercel project → **Settings → Environment Variables** set
+`NEXT_PUBLIC_BACKEND_URL=https://your-tunnel-url` and trigger a **Redeploy**.
+The frontend will now show your laptop's fresh data.
+
+### Option B — Full-stack local dev (3 terminals)
+
+```bash
+# Backend
+cd backend && source .venv/bin/activate
 uvicorn app.main:app --reload --port 8000
-```
 
-### 2. Run the scan
+# Frontend
+cd frontend && npm install
+npm run dev      # opens http://localhost:3000
 
-```bash
-# Trigger a full scan (downloads ~380 days of OHLCV for ~240 stocks — takes a few minutes)
+# Manual scan (usually not needed — auto-scan handles it)
 curl -X POST http://localhost:8000/api/scan
-curl http://localhost:8000/api/scan/status     # poll status
 ```
 
-The scheduler will also trigger automatically every day at 10:15 UTC (NSE close).
-
-### 3. Frontend
+### Option C — Docker / Railway
 
 ```bash
-cd frontend
-npm install
-npm run dev     # opens http://localhost:3000
+cd backend && docker build -t trendradar . && docker run -p 8000:8000 trendradar
 ```
+
+The scheduler triggers automatically every day at 10:15 UTC (NSE close).
 
 ## Configuration
 
@@ -64,6 +91,19 @@ To switch to S&P 500:
 ```python
 UNIVERSE: Literal["nifty500", "sp500"] = "sp500"
 ```
+
+### Environment variables
+
+Copy `backend/.env.example` to `backend/.env` (or export the variables).
+The two you'll most likely touch:
+
+| Variable | Default | What it does |
+|---|---|---|
+| `AUTO_SCAN_ON_STARTUP` | `true` | Scan automatically at boot when data is stale |
+| `STALE_SCAN_MAX_AGE_HOURS` | `18` | How old (hours) the last scan must be before auto-scan kicks in |
+| `DISABLE_SCHEDULER` | `0` | Set to `1` on a laptop to skip the fixed-hour cron |
+| `SQLITE_DB_PATH` | `market_predictor.db` | Where scan results + price cache are stored |
+| `CORS_ORIGINS` | — | Extra allowed origins (comma-separated) |
 
 ## Running tests
 

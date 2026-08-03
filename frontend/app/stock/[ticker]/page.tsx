@@ -29,15 +29,16 @@ function Stat({ label, children }: { label: string; children: React.ReactNode })
 export default async function StockDetailPage({ params }: PageProps) {
   const ticker = decodeURIComponent(params.ticker).toUpperCase();
 
-  let stock, chartData;
-  try {
-    [stock, chartData] = await Promise.all([
-      fetchStock(ticker),
-      fetchChartData(ticker, 365),
-    ]);
-  } catch {
-    notFound();
-  }
+  // Independent fetch outcomes: a chart data failure must NOT 404 an otherwise
+  // perfectly valid stock page.
+  const stockRes  = await fetchStock(ticker).then(
+    (s) => ({ ok: true as const, value: s }),
+    ()  => ({ ok: false as const }),
+  );
+  if (!stockRes.ok) notFound();
+  const stock = stockRes.value;
+
+  const chartData = await fetchChartData(ticker, 365).catch(() => null);
 
   const pct  = stock.pct_change_1d ?? 0;
   const isUp = pct >= 0;
@@ -51,7 +52,6 @@ export default async function StockDetailPage({ params }: PageProps) {
         <ChevronRight className="h-3 w-3" />
         <span className="font-mono text-text-dim">{ticker}</span>
       </nav>
-
       {/* Hero stat strip */}
       <div className="fade-up overflow-hidden rounded-xl border border-border bg-surface">
         <div className="flex flex-col gap-1 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:gap-3">
@@ -120,10 +120,17 @@ export default async function StockDetailPage({ params }: PageProps) {
 
       <Disclaimer />
 
-      {/* Chart */}
+      {/* Chart — degrade gracefully when chart data is unavailable */}
       <div className="fade-up fade-up-1 rounded-xl border border-border bg-surface p-5">
         <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted">Price Chart</h2>
-        <StockChart chartData={chartData} ticker={ticker} />
+        {chartData ? (
+          <StockChart chartData={chartData} ticker={ticker} />
+        ) : (
+          <div className="flex h-[420px] flex-col items-center justify-center gap-2 text-center text-sm text-muted">
+            <p>Chart data unavailable for {ticker}.</p>
+            <p className="text-xs">The stock data above is fresh — only the price history failed to load.</p>
+          </div>
+        )}
       </div>
 
       {/* Main grid */}
@@ -153,22 +160,22 @@ export default async function StockDetailPage({ params }: PageProps) {
         </div>
       </div>
 
-      {/* Signal weights breakdown */}
+      {/* Signal weights breakdown — uses the real per-signal 0-100 scores from the scan */}
       <div className="rounded-xl border border-border bg-surface p-5">
         <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted">
           All Signal Scores
         </h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <SignalCard label="Relative Strength"     score={(stock.rs_rank ?? 0) / 99 * 100} note={`RS ${stock.rs_rank?.toFixed(0) ?? "—"}/99`} />
-          <SignalCard label="12-1 Momentum"         score={null} note={`${stock.momentum_12_1 != null ? fmtPct(stock.momentum_12_1, 1) : "—"} raw return`} />
-          <SignalCard label="Trend Template"        score={stock.trend_template_score} note={stock.trend_template_pass ? "All criteria pass" : "Some criteria fail"} />
-          <SignalCard label="VCP Pattern"           score={stock.vcp_detected ? 80 : 0} note={stock.vcp_detected ? `${stock.vcp_contractions} contractions` : "Not detected"} />
-          <SignalCard label="Mansfield Stage"       score={stock.mansfield_stage2 ? 85 : 30} note={`Stage ${stock.mansfield_stage2 ? "2 (Advancing)" : "1/3/4"}`} />
-          <SignalCard label="52-wk High Proximity"  score={(stock.high_proximity ?? 0) * 100} note={`${stock.high_proximity != null ? (stock.high_proximity * 100).toFixed(0) : "—"}% of 52-wk range`} />
-          <SignalCard label="Frog-in-Pan (FIP)"     score={null} note={`ID metric: ${fmtNum(stock.frog_in_pan, 3)}`} />
-          <SignalCard label="Risk-Adj Momentum"     score={null} note={`Sharpe-like: ${fmtNum(stock.risk_adj_momentum, 2)}`} />
-          <SignalCard label="Volume / Pocket Pivot" score={stock.pocket_pivot ? 100 : stock.volume_surge ? 70 : 20} note={stock.pocket_pivot ? "Pocket pivot fired" : stock.volume_surge ? "Volume surge" : "No surge"} />
-          <SignalCard label="ADX Trend Strength"    score={Math.min(100, (stock.adx ?? 0) / 50 * 100)} note={`ADX ${fmtNum(stock.adx, 1)}`} />
+          <SignalCard label="Relative Strength"     score={stock.rs_score}            note={`RS rank ${stock.rs_rank?.toFixed(0) ?? "—"}/99 (IBD-style percentile)`} />
+          <SignalCard label="12-1 Momentum"         score={stock.momentum_12_1_score} note={`${stock.momentum_12_1 != null ? fmtPct(stock.momentum_12_1, 1) : "—"} raw 12-1 return`} />
+          <SignalCard label="Trend Template"        score={stock.trend_template_score} note={stock.trend_template_pass ? "All 8 Minervini criteria pass" : "Some criteria fail"} />
+          <SignalCard label="VCP Pattern"           score={stock.vcp_score}           note={stock.vcp_detected ? `${stock.vcp_contractions} successive contractions` : "Not detected"} />
+          <SignalCard label="Mansfield Stage"       score={stock.mansfield_score}     note={`Stage ${stock.mansfield_stage2 ? "2 (Advancing)" : "1/3/4"}`} />
+          <SignalCard label="52-wk High Proximity"  score={stock.high_proximity_score} note={`${stock.high_proximity != null ? (stock.high_proximity * 100).toFixed(0) : "—"}% of 52-wk range`} />
+          <SignalCard label="Frog-in-Pan (FIP)"     score={stock.frog_in_pan_score}   note={`ID metric: ${fmtNum(stock.frog_in_pan, 3)}`} />
+          <SignalCard label="Risk-Adj Momentum"     score={stock.risk_adj_score}      note={`Sharpe-like: ${fmtNum(stock.risk_adj_momentum, 2)}`} />
+          <SignalCard label="Volume / Pocket Pivot" score={stock.volume_score}        note={stock.pocket_pivot ? "Pocket pivot fired" : stock.volume_surge ? "Volume surge" : "No surge"} />
+          <SignalCard label="ADX Trend Strength"    score={stock.adx_score}           note={`ADX ${fmtNum(stock.adx, 1)}`} />
         </div>
       </div>
     </div>

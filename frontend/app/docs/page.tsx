@@ -19,6 +19,9 @@ const NAV = [
   { id: "vcp",         label: "VCP Setup" },
   { id: "chart",       label: "Stock Chart" },
   { id: "filters",     label: "Filters & Search" },
+  { id: "watchlist",   label: "Watchlist" },
+  { id: "compare",     label: "Compare" },
+  { id: "selfhost",    label: "Self-hosting" },
   { id: "disclaimer",  label: "Disclaimer" },
 ];
 
@@ -207,33 +210,35 @@ export default function DocsPage() {
           {/* ── COMPOSITE SCORE ────────────────────────────── */}
           <Section id="score" title="Composite Score" icon={Activity}>
             <p>
-              The composite score is a single number (0–100) that combines multiple momentum
-              signals into one easy-to-compare ranking. Think of it as a &quot;momentum
-              health check&quot; — the higher, the stronger.
+              The composite score is a weighted sum of <strong className="text-text">10 rule-based
+              signals</strong> — every sub-score is normalised to 0–100, multiplied by its weight,
+              and added up:
             </p>
-            <p>It is built from four components:</p>
             <div className="grid gap-3 sm:grid-cols-2">
-              <Card>
-                <p className="font-medium text-text mb-1">Trend Template Score</p>
-                <p>How many of the 8 Minervini trend rules the stock passes. Passing all 8 gives the full weight.</p>
-              </Card>
-              <Card>
-                <p className="font-medium text-text mb-1">RS Rank</p>
-                <p>Relative performance vs the rest of the Nifty 500. A stock beating 90% of peers scores highly here.</p>
-              </Card>
-              <Card>
-                <p className="font-medium text-text mb-1">ADX (Trend Strength)</p>
-                <p>Measures how strongly the stock is trending in any direction. ADX above 25 means a real trend; above 40 means a very strong one.</p>
-              </Card>
-              <Card>
-                <p className="font-medium text-text mb-1">52-Week High Proximity</p>
-                <p>How close the stock is to its yearly high. Stocks near new highs are often the ones that keep going higher.</p>
-              </Card>
+              <Card><p className="font-medium text-text mb-1">RS Rank <span className="ml-1 text-[10px] font-normal text-muted">25%</span></p>
+                <p>IBD-style percentile vs the rest of the Nifty 500 trailing return.</p></Card>
+              <Card><p className="font-medium text-text mb-1">12-1 Momentum <span className="ml-1 text-[10px] font-normal text-muted">15%</span></p>
+                <p>12-month return skipping the last month; ranked across the universe.</p></Card>
+              <Card><p className="font-medium text-text mb-1">Trend Template <span className="ml-1 text-[10px] font-normal text-muted">20%</span></p>
+                <p>How many of the 8 Minervini trend rules the stock passes.</p></Card>
+              <Card><p className="font-medium text-text mb-1">VCP Setup <span className="ml-1 text-[10px] font-normal text-muted">10%</span></p>
+                <p>Volatility contraction + volume dry-up; rewards tight bases.</p></Card>
+              <Card><p className="font-medium text-text mb-1">Mansfield Stage <span className="ml-1 text-[10px] font-normal text-muted">5%</span></p>
+                <p>Stage 2 uptrend vs the Nifty 50 benchmark (Weinstein analysis).</p></Card>
+              <Card><p className="font-medium text-text mb-1">52-wk High Proximity <span className="ml-1 text-[10px] font-normal text-muted">5%</span></p>
+                <p>How close to the yearly high — near-high stocks tend to keep trending.</p></Card>
+              <Card><p className="font-medium text-text mb-1">Frog-in-Pan <span className="ml-1 text-[10px] font-normal text-muted">5%</span></p>
+                <p>Many small gains beat a few large jumps (Bhattacharya &amp; Galpin).</p></Card>
+              <Card><p className="font-medium text-text mb-1">Risk-Adjusted Momentum <span className="ml-1 text-[10px] font-normal text-muted">8%</span></p>
+                <p>Sharpe-like: return ÷ volatility. Smooth trends rank higher.</p></Card>
+              <Card><p className="font-medium text-text mb-1">Volume Surge <span className="ml-1 text-[10px] font-normal text-muted">4%</span></p>
+                <p>Pocket pivots and ≥1.5× average volume days signal accumulation.</p></Card>
+              <Card><p className="font-medium text-text mb-1">ADX Trend Strength <span className="ml-1 text-[10px] font-normal text-muted">3%</span></p>
+                <p>Trend conviction filter; choppy names are suppressed.</p></Card>
             </div>
             <p className="text-xs text-muted">
-              The score bar on the leaderboard is min-max normalised to the current filtered
-              list, so the top stock always fills the bar. The raw number shown is always out
-              of 100.
+              Weights are configurable in <code className="font-mono text-accent">backend/app/config.py</code>.
+              The leaderboard bar is min-max normalised per view; the raw number is the true 0–100 score.
             </p>
           </Section>
 
@@ -452,6 +457,58 @@ export default function DocsPage() {
               Filtered views are <strong className="text-text">shareable</strong> — the URL
               updates automatically as you filter, so you can copy and send a link and the
               recipient will see the same filtered table.
+            </p>
+          </Section>
+
+          {/* ── WATCHLIST ────────────────────────────────────── */}
+          <Section id="watchlist" title="Watchlist" icon={Target}>
+            <p>
+              Star any stock on the leaderboard or a stock detail page and it lands on your{" "}
+              <a href="/watchlist" className="text-accent underline-offset-2 hover:underline">Watchlist</a>.
+              The list lives in your browser&apos;s localStorage — no account, no sync, private to you.
+              Click the star again (or clear the list) to remove an entry.
+            </p>
+          </Section>
+
+          {/* ── COMPARE ─────────────────────────────────────── */}
+          <Section id="compare" title="Compare" icon={ArrowUpRight}>
+            <p>
+              The <a href="/compare" className="text-accent underline-offset-2 hover:underline">Compare</a>{" "}
+              page puts two stocks side-by-side: price action rebased to 100 so relative strength is
+              obvious, plus winner-highlighted rows for composite, RS rank, trend template, ADX,
+              valuation, and risk metrics.
+            </p>
+          </Section>
+
+          {/* ── SELF-HOSTING ─────────────────────────────────── */}
+          <Section id="selfhost" title="Self-hosting the backend" icon={BookOpen}>
+            <p>
+              The frontend on Vercel reads from a FastAPI backend you run yourself — most people
+              just run it on a laptop for a few minutes whenever they want fresh data.
+            </p>
+            <Card>
+              <pre className="overflow-x-auto font-mono text-xs leading-relaxed text-text-dim">
+{`# 1. Start the backend (auto-scans if data is missing or stale)
+cd backend
+source .venv/bin/activate        # or: python -m venv .venv && pip install -r requirements.txt
+uvicorn app.main:app --port 8000
+
+# 2. (optional) Expose it so the Vercel frontend can reach it
+cloudflared tunnel --url http://localhost:8000
+#    or: ngrok http 8000
+
+# 3. Paste the tunnel URL into Vercel → your app’s Settings → Env Vars:
+#    NEXT_PUBLIC_BACKEND_URL=https://<your-tunnel>.trycloudflare.com
+#    then trigger a redeploy of the frontend.
+
+# Ctrl+C to stop. Scan results persist in SQLite — nothing is lost.`}
+              </pre>
+            </Card>
+            <p className="text-xs text-muted">
+              Behaviour knobs live in <code className="font-mono text-accent">backend/.env.example</code>:
+              {" "}<code className="font-mono">AUTO_SCAN_ON_STARTUP</code>,{" "}
+              <code className="font-mono">STALE_SCAN_MAX_AGE_HOURS</code>,{" "}
+              <code className="font-mono">DISABLE_SCHEDULER</code>.
             </p>
           </Section>
 

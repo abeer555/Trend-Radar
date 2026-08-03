@@ -1,8 +1,9 @@
-import { BarChart3, Layers, ListChecks, Target, Flame } from "lucide-react";
+import { BarChart3, Layers, ListChecks, Target, Flame, Terminal } from "lucide-react";
 import { fetchLeaderboard, fetchSectors, fetchScanStatus } from "@/lib/api";
 import type { LeaderboardRow } from "@/lib/types";
 import LeaderboardTable from "@/components/LeaderboardTable";
 import Disclaimer from "@/components/Disclaimer";
+import MarketBreadth from "@/components/MarketBreadth";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -127,29 +128,45 @@ export default async function LeaderboardPage() {
 
       {!isEmpty && (
         <div className="fade-up fade-up-1">
-          <StatsStrip rows={leaderboard} />
+          <MarketBreadth rows={leaderboard} />
         </div>
       )}
 
       {isEmpty ? (
-        <div className="flex flex-col items-center gap-4 rounded-xl border border-border bg-surface py-20 text-center">
-          <BarChart3 className="h-10 w-10 text-muted" />
+        <div className="flex flex-col items-center gap-5 rounded-xl border border-border bg-surface px-6 py-16 text-center shadow-card">
+          <span className="flex h-14 w-14 items-center justify-center rounded-xl border border-border bg-surface-2 text-accent">
+            <BarChart3 className="h-6 w-6" />
+          </span>
           <div>
-            <p className="text-lg font-semibold">No data yet</p>
-            <p className="mt-1 text-sm text-muted">
-              Run the daily scan to populate the dashboard.
+            <p className="text-lg font-semibold text-text">No data yet</p>
+            <p className="mt-1 max-w-md text-sm leading-relaxed text-muted">
+              This dashboard reads scan results from the backend database. Start your
+              local backend and it will begin scanning automatically if data is missing
+              or stale.
             </p>
           </div>
-          <code className="rounded border border-border bg-bg px-3 py-1.5 font-mono text-xs text-accent">
-            curl -X POST http://localhost:8000/api/scan
-          </code>
+
+          <div className="flex w-full max-w-lg flex-col gap-2 rounded-lg border border-border bg-bg p-4 text-left">
+            <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted">
+              <Terminal className="h-3.5 w-3.5" /> Run on your laptop
+            </p>
+            <ol className="list-decimal space-y-1.5 pl-5 text-sm text-text-dim">
+              <li><code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-accent">cd backend && uvicorn app.main:app --port 8000</code></li>
+              <li>Watch <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-accent">localhost:8000/api/scan/status</code> until <em className="text-text-dim">is_running</em> flips false</li>
+              <li>Close the terminal — data lives in SQLite. Re-run anytime.</li>
+            </ol>
+          </div>
+
           <p className="max-w-md text-xs text-muted">
-            Or start the backend and wait for the scheduler to trigger after market close
-            (10:15 UTC for NSE / Nifty 500).
+            Or wait for the daily scheduler to trigger after NSE close
+            (10:15 UTC) if the backend process is already running.
           </p>
         </div>
       ) : (
-        <LeaderboardTable rows={leaderboard} sectors={sectorList} />
+        <div className="flex flex-col gap-5">
+          <StatsStrip rows={leaderboard} />
+          <LeaderboardTable rows={leaderboard} sectors={sectorList} />
+        </div>
       )}
     </div>
   );

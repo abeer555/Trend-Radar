@@ -36,16 +36,17 @@ export default function StockChart({ chartData, ticker }: Props) {
   const days = PERIOD_DAYS[period];
 
   const visibleRef = useRef(visible);
-  visibleRef.current = visible;
+  useEffect(() => { visibleRef.current = visible; }, [visible]);
 
   function toggle(key: SeriesKey) {
-    setVisible(v => {
-      const next = !v[key];
-      for (const s of seriesRef.current[key] ?? []) {
-        try { s.applyOptions({ visible: next }); } catch {}
-      }
-      return { ...v, [key]: next };
-    });
+    const next = !visibleRef.current[key];
+    // Mutating chart series inside a setState updater is an anti-pattern —
+    // updaters must be pure (React may invoke them twice under StrictMode).
+    // Do the mutation here, then update state separately.
+    for (const s of seriesRef.current[key] ?? []) {
+      try { s.applyOptions({ visible: next }); } catch {}
+    }
+    setVisible(v => ({ ...v, [key]: next }));
   }
 
   useEffect(() => {

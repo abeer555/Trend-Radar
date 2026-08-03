@@ -52,10 +52,25 @@ log = logging.getLogger(__name__)
 def run_full_scan(force_refresh: bool = False) -> dict[str, Any]:
     """
     Execute a full universe scan.  Returns a summary dict.
-    Designed to be safe to call concurrently — upsert is atomic per row.
+
+    Crash-safety: any exception is recorded in `scan_log` with status='failed'
+    before being re-raised, so `/api/scan/status` reflects the failure instead
+    of leaving a phantom `running` row behind (which the startup recovery in
+    `main.py` would otherwise have to clean up next boot).
     """
     engine   = get_engine()
     log_id   = log_scan_start(engine)
+    try:
+        return _run_full_scan_impl(engine, log_id, force_refresh=force_refresh)
+    except Exception as exc:
+        try:
+            log_scan_end(log_id, 0, "failed", str(exc)[:500], engine)
+        except Exception:
+            log.exception("Failed to record scan failure in scan_log")
+        raise
+
+
+def _run_full_scan_impl(engine, log_id: int, force_refresh: bool = False) -> dict[str, Any]:
     scan_dt  = date.today()
     universe = load_universe()
     tickers  = [s.ticker for s in universe]

@@ -60,7 +60,12 @@ def compute_volume(df: pd.DataFrame) -> VolumeResult:
             # Highest volume on a down-day in the prior 10 sessions (excluding today)
             lookback_c = closes.iloc[-(VOLUME_LOOKBACK_DOWN_DAYS + 1):-1]
             lookback_v = volumes.iloc[-(VOLUME_LOOKBACK_DOWN_DAYS + 1):-1]
-            down_vols = lookback_v[lookback_c.diff().values < 0]
+            # Position-based boolean indexing (avoids the fragile `.values`
+            # alignment gnarliness and makes the NaN-at-position-0 from
+            # `.diff()` explicit instead of relying on `NaN < 0 → False`).
+            daily_diff = lookback_c.diff()
+            down_mask  = daily_diff.notna() & (daily_diff < 0)
+            down_vols  = lookback_v[down_mask]
             if len(down_vols) > 0:
                 max_down_vol = float(down_vols.max())
                 pocket_pivot = today_vol > max_down_vol

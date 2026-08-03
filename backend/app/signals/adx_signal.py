@@ -1,13 +1,16 @@
 """
 ADX (Average Directional Index) — trend-strength filter.
-Uses the in-house ta_impl; falls back to pandas-ta if available.
+Uses pandas-ta if installed; otherwise the in-house ta_impl implementation.
 """
 
 from __future__ import annotations
 
+import logging
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -28,28 +31,40 @@ def compute_adx(df: pd.DataFrame) -> ADXResult:
     if len(df) < ADX_PERIOD + 10:
         return _null
 
+    # ── Try pandas-ta first (faster, vectorised) ────────────────────────
     try:
-        # Try pandas-ta first (faster)
+        import pandas_ta as ta  # type: ignore
+    except ImportError:
+        ta = None
+
+    if ta is not None:
         try:
-            import pandas_ta as ta  # type: ignore
             adx_df = ta.adx(df["High"], df["Low"], df["Close"], length=ADX_PERIOD)
             if adx_df is not None and not adx_df.empty:
-                adx_col = [c for c in adx_df.columns if c.upper().startswith("ADX_") and "DM" not in c and "DI" not in c]
+                adx_col = [c for c in adx_df.columns
+                           if c.upper().startswith("ADX_") and "DM" not in c and "DI" not in c]
                 if adx_col:
                     adx_val = float(adx_df[adx_col[0]].dropna().iloc[-1])
-                    if not np.isnan(adx_val):
+                    if np.isfinite(adx_val):
                         return _make_result(adx_val, ADX_TRENDING_FLOOR, ADX_STRONG_TREND)
-        except (ImportError, Exception):
-            pass
+        except Exception as exc:
+            # pandas-ta can break in subtle ways on new pandas versions —
+            # log it, then fall through to the in-house implementation.
+            log.debug("pandas-ta ADX failed; falling back to ta_impl: %s", exc)
 
-        # Fallback: in-house implementation
+    # ── In-house implementation ─────────────────────────────────────────
+    try:
         from app.signals.ta_impl import adx as _adx
         adx_series = _adx(df["High"], df["Low"], df["Close"], length=ADX_PERIOD)
-        adx_val = float(adx_series.dropna().iloc[-1]) if not adx_series.dropna().empty else 0.0
-        if np.isnan(adx_val):
+        clean = adx_series.dropna()
+        if clean.empty:
+            return _null
+        adx_val = float(clean.iloc[-1])
+        if not np.isfinite(adx_val):
             return _null
         return _make_result(adx_val, ADX_TRENDING_FLOOR, ADX_STRONG_TREND)
-    except Exception:
+    except Exception as exc:
+        log.warning("compute_adx failed (both pandas-ta and ta_impl): %s", exc)
         return _null
 
 

@@ -1,0 +1,32 @@
+# Files excluded from Docker build context (backend/)
+# Keeps the image small and prevents shipping local state.
+
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+env/
+
+# Local runtime state — never ship these into the image
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+cache/
+data/*.pkl
+
+# Local env / secrets
+.env
+*.env.local
+
+# Docs & meta
+*.md
+.git/
+.gitignore
+.dockerignore
+Dockerfile
+railway.toml
+tests/

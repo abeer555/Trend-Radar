@@ -30,20 +30,29 @@ export interface StockDetail {
 
   // Scores
   rs_rank:              number | null;
+  rs_score:             number | null;
   momentum_12_1:        number | null;
+  momentum_12_1_score:  number | null;
   trend_template_score: number | null;
   trend_template_pass:  boolean | null;
   vcp_detected:         boolean | null;
   vcp_contractions:     number | null;
   vcp_pivot:            number | null;
+  vcp_score:            number | null;
   mansfield_stage2:     boolean | null;
   mansfield_rs:         number | null;
+  mansfield_score:      number | null;
   high_proximity:       number | null;
+  high_proximity_score: number | null;
   frog_in_pan:          number | null;
+  frog_in_pan_score:    number | null;
   risk_adj_momentum:    number | null;
+  risk_adj_score:       number | null;
   volume_surge:         boolean | null;
   pocket_pivot:         boolean | null;
+  volume_score:         number | null;
   adx:                  number | null;
+  adx_score:            number | null;
 
   // Technicals
   rsi:                  number | null;

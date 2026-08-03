@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Search, X, Check } from "lucide-react";
+import { Search, X, Check, TrendingUp, Sparkles, Gauge, Volume2, Layers } from "lucide-react";
 import clsx from "clsx";
 import Select from "./ui/Select";
 
@@ -12,11 +12,54 @@ export interface Filters {
   minPrice: string;  // "" | "50" | "100" | "500" | "1000"
   tt:       boolean;
   vcp:      boolean;
+  volumeSurge:    boolean;
+  minProximity: string; // "" | "0.85"  (fraction of 52-wk range)
 }
 
 export const EMPTY_FILTERS: Filters = {
   query: "", sector: "", minRS: "", minPrice: "", tt: false, vcp: false,
+  volumeSurge: false, minProximity: "",
 };
+
+/** Screener presets — pre-filled filter combos shareable via the URL. */
+export const PRESETS: Array<{ key: string; label: string; icon: React.ReactNode; apply: Partial<Filters> }> = [
+  {
+    key:   "all",
+    label: "All stocks",
+    icon:  <Layers className="h-3.5 w-3.5" />,
+    apply: EMPTY_FILTERS,
+  },
+  {
+    key:   "breakouts",
+    label: "Breakouts",
+    icon:  <TrendingUp className="h-3.5 w-3.5" />,
+    apply: { ...EMPTY_FILTERS, tt: true, minRS: "80" },
+  },
+  {
+    key:   "vcp",
+    label: "VCP setups",
+    icon:  <Sparkles className="h-3.5 w-3.5" />,
+    apply: { ...EMPTY_FILTERS, vcp: true },
+  },
+  {
+    key:   "near-52w-high",
+    label: "Near 52w High",
+    icon:  <Gauge className="h-3.5 w-3.5" />,
+    apply: { ...EMPTY_FILTERS, minProximity: "0.85" },
+  },
+  {
+    key:   "volume-surges",
+    label: "Volume surges",
+    icon:  <Volume2 className="h-3.5 w-3.5" />,
+    apply: { ...EMPTY_FILTERS, volumeSurge: true },
+  },
+  {
+    key:   "highest-rs",
+    label: "Highest RS",
+    icon:  <TrendingUp className="h-3.5 w-3.5" />,
+    apply: { ...EMPTY_FILTERS, minRS: "90" },
+  },
+];
 
 const RS_OPTS = ["50", "70", "80", "90"].map(v => ({
   value: v, label: `RS ≥ ${v}`,
@@ -62,9 +105,11 @@ function TogglePill({
         {active && <Check className="h-2.5 w-2.5" strokeWidth={3.5} />}
       </span>
       {children}
-      <span className={clsx("text-xs tabular-nums", active ? "text-accent/70" : "text-muted")}>
-        {count}
-      </span>
+      {count >= 0 && (
+        <span className={clsx("text-xs tabular-nums", active ? "text-accent/70" : "text-muted")}>
+          {count}
+        </span>
+      )}
     </button>
   );
 }
@@ -106,12 +151,52 @@ export default function FilterBar({
   }, []);
 
   const hasChips =
-    !!filters.sector || !!filters.minRS || !!filters.minPrice || filters.tt || filters.vcp;
+    !!filters.sector || !!filters.minRS || !!filters.minPrice || filters.tt || filters.vcp
+    || filters.volumeSurge || !!filters.minProximity;
   const hasAny = hasChips || !!filters.query;
 
+  /** Which preset (if any) exactly matches the current filters. */
+  const activePreset = PRESETS.find(p => {
+    const merged = { ...EMPTY_FILTERS, ...p.apply };
+    return (
+      merged.query       === filters.query &&
+      merged.sector      === filters.sector &&
+      merged.minRS       === filters.minRS &&
+      merged.minPrice    === filters.minPrice &&
+      merged.tt          === filters.tt &&
+      merged.vcp         === filters.vcp &&
+      merged.volumeSurge === filters.volumeSurge &&
+      merged.minProximity === filters.minProximity
+    );
+  })?.key ?? null;
+
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-3">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-col gap-3">
+      {/* Preset chips — shareable filter combos */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {PRESETS.map(p => {
+          const isActive = p.key === activePreset;
+          return (
+            <button
+              key={p.key}
+              type="button"
+              onClick={() => onChange({ ...filters, ...p.apply })}
+              className={clsx(
+                "inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors",
+                isActive
+                  ? "border-accent/60 bg-accent/15 text-accent"
+                  : "border-border bg-surface-2 text-text-dim hover:border-border-strong hover:text-text",
+              )}
+            >
+              {p.icon}
+              {p.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-3 shadow-card">
+        <div className="flex flex-wrap items-center gap-2">
         {/* Search */}
         <div className="relative w-full sm:w-64">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
@@ -169,6 +254,17 @@ export default function FilterBar({
         <TogglePill active={filters.vcp} onClick={() => set({ vcp: !filters.vcp })} count={vcpCount}>
           VCP Setup
         </TogglePill>
+        <TogglePill active={filters.volumeSurge} onClick={() => set({ volumeSurge: !filters.volumeSurge })} count={-1}>
+          Volume surge
+        </TogglePill>
+
+        <Select
+          value={filters.minProximity}
+          onChange={v => set({ minProximity: v })}
+          options={[{ value: "", label: "Any range %"}, { value: "0.85", label: "≥ 85th percentile of 52w range" }, { value: "0.95", label: "≥ 95th percentile" }]}
+          label="52w proximity"
+          className="w-56"
+        />
 
         <span className="ml-auto text-xs text-muted">
           <span className="font-medium tabular-nums text-text-dim">{shown}</span>
@@ -187,8 +283,14 @@ export default function FilterBar({
               ₹{Number(filters.minPrice).toLocaleString("en-IN")}+
             </Chip>
           )}
+          {filters.minProximity && (
+            <Chip onClear={() => set({ minProximity: "" })}>
+              ≥ {(Number(filters.minProximity) * 100).toFixed(0)}% of 52w range
+            </Chip>
+          )}
           {filters.tt  && <Chip onClear={() => set({ tt: false })}>Trend Template</Chip>}
           {filters.vcp && <Chip onClear={() => set({ vcp: false })}>VCP Setup</Chip>}
+          {filters.volumeSurge && <Chip onClear={() => set({ volumeSurge: false })}>Volume surge</Chip>}
           {hasAny && (
             <button
               type="button"
@@ -200,6 +302,7 @@ export default function FilterBar({
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }

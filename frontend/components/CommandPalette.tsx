@@ -62,7 +62,7 @@ export default function CommandPalette() {
 
   const go = useCallback((ticker: string) => {
     setOpen(false);
-    router.push(`/stock/${ticker}`);
+    router.push(`/stock/${encodeURIComponent(ticker)}`);
   }, [router]);
 
   function onKeyDown(e: React.KeyboardEvent) {

@@ -18,8 +18,10 @@ from pydantic import BaseModel
 
 from app.database import (
     get_engine,
+    get_last_completed_scan,
     get_last_scan_status,
     get_sectors,
+    latest_completed_scan_age_hours,
     load_leaderboard,
     load_scan_result,
 )
@@ -149,18 +151,60 @@ _scan_running = False
 
 @router.post("/scan", response_model=ScanResponse)
 def trigger_scan(background_tasks: BackgroundTasks, force_refresh: bool = False):
+    """
+    Kick off a scan in the background.
+
+    The `_scan_running` flag is set *here* (under the lock) rather than inside
+    the background task, so two quick `POST /api/scan` calls can never both
+    slip through.  It's cleared in `_run_scan_bg`'s `finally`.
+    """
     global _scan_running
-    if _scan_running:
-        return ScanResponse(status="already_running", message="A scan is already in progress.")
-    background_tasks.add_task(_run_scan_bg, force_refresh)
+    with _scan_lock:
+        if _scan_running:
+            return ScanResponse(status="already_running", message="A scan is already in progress.")
+        _scan_running = True
+        background_tasks.add_task(_run_scan_bg, force_refresh)
     return ScanResponse(status="started", message="Scan started in background. Check /api/scan/status.")
 
 
 @router.get("/scan/status")
 def scan_status() -> dict:
+    """
+    Rich scan status for the frontend.
+
+    `is_running` reflects the *in-process* flag (accurate while this process is
+    alive), while `last_completed`/`data_age_hours`/`is_stale` come from the DB
+    so they survive restarts and are correct even when the server just booted.
+    """
+    from datetime import datetime
     engine = get_engine()
-    status = get_last_scan_status(engine)
-    return status or {"status": "no_scan_run"}
+    last       = get_last_scan_status(engine)
+    completed  = get_last_completed_scan(engine)
+    age_hours  = latest_completed_scan_age_hours(engine)
+
+    with _scan_lock:
+        running = _scan_running
+
+    # The DB `status='running'` row can exist without the in-process flag being
+    # set when the server restarted mid-scan; recovery on startup flips those to
+    # 'failed', so here they should agree.
+    is_stale = age_hours is None or age_hours > _stale_threshold()
+
+    return {
+        **(last or {"status": "no_scan_run"}),
+        "is_running":            running,
+        "has_data":              completed is not None,
+        "last_completed_at":     (completed or {}).get("finished_at"),
+        "data_age_hours":        round(age_hours, 2) if age_hours is not None else None,
+        "is_stale":              is_stale,
+        "stale_threshold_hours": _stale_threshold(),
+        "server_time":           datetime.utcnow().isoformat() + "Z",
+    }
+
+
+def _stale_threshold() -> int:
+    from app.config import STALE_SCAN_MAX_AGE_HOURS
+    return STALE_SCAN_MAX_AGE_HOURS
 
 
 # ---------------------------------------------------------------------------
@@ -373,10 +417,18 @@ def _pct_within(price, high, tolerance: float) -> bool | None:
 
 
 def _run_scan_bg(force_refresh: bool) -> None:
+    """
+    Wrap `run_full_scan` so an exception always:
+      1. marks scan_log as failed (see scanner.run_full_scan's own try/except), and
+      2. releases the in-process running flag so future scans can be triggered.
+    """
     global _scan_running
-    _scan_running = True
     try:
         from app.scanner import run_full_scan
         run_full_scan(force_refresh=force_refresh)
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("Background scan crashed")
     finally:
-        _scan_running = False
+        with _scan_lock:
+            _scan_running = False

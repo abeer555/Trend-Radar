@@ -1,6 +1,12 @@
 """
 Pure pandas/numpy implementations of all technical indicators.
 No external TA library required — every formula is explicit and auditable.
+
+Note: Wilder-style smoothing (RSI, ADX, ATR) is implemented with
+`ewm(alpha=1/n, adjust=False)`, which converges to true Wilder smoothing
+exponentially but differs slightly in the first ~n outputs.  That's a well-
+understood approximation; for scoring purposes the difference vanishes
+within a few bars past the warm-up period.
 """
 
 from __future__ import annotations

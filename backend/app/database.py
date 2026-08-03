@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -294,7 +294,11 @@ def load_leaderboard(
     allowed_sort = {
         "composite_score", "rs_rank", "momentum_12_1", "last_price",
         "pct_change_1d", "adx", "atr", "volatility", "trend_template_score",
+        "high_proximity", "vcp_score", "mansfield_score", "volume_score",
+        "frog_in_pan_score", "risk_adj_score",
     }
+    # Defense in depth: sort_by is f-string'd into the SQL below, so it must be
+    # whitelisted to a known-safe column, never user input.
     if sort_by not in allowed_sort:
         sort_by = "composite_score"
 
@@ -385,3 +389,52 @@ def get_last_scan_status(engine: Engine) -> dict | None:
             text("SELECT * FROM scan_log ORDER BY id DESC LIMIT 1")
         ).mappings().fetchone()
     return dict(row) if row else None
+
+
+def get_last_completed_scan(engine: Engine) -> dict | None:
+    """Return the most recent scan_log row whose status is 'completed*'."""
+    with engine.connect() as conn:
+        row = conn.execute(
+            text(
+                "SELECT * FROM scan_log "
+                "WHERE status LIKE 'completed%' "
+                "ORDER BY id DESC LIMIT 1"
+            )
+        ).mappings().fetchone()
+    return dict(row) if row else None
+
+
+def recover_stale_running_scans(engine: Engine) -> int:
+    """
+    Mark any `running` scan_log rows as failed.
+
+    If the laptop (or container) was closed mid-scan, a `running` row can be
+    left behind forever.  On startup the previous process is gone, so any
+    `running` rows are by definition orphaned.  Returns number of rows fixed.
+    """
+    with engine.connect() as conn:
+        result = conn.execute(
+            text(
+                "UPDATE scan_log SET status='failed', "
+                "finished_at=:ts, error_message=:msg "
+                "WHERE status='running'"
+            ),
+            {"ts": datetime.now(timezone.utc).replace(tzinfo=None), "msg": "interrupted — process closed before scan finished"},
+        )
+        conn.commit()
+        return result.rowcount or 0
+
+
+def latest_completed_scan_age_hours(engine: Engine) -> float | None:
+    """Hours since the last *completed* scan finished.  None if never completed."""
+    last = get_last_completed_scan(engine)
+    if not last or not last.get("finished_at"):
+        return None
+    finished = last["finished_at"]
+    if isinstance(finished, str):
+        try:
+            finished = datetime.fromisoformat(finished)
+        except ValueError:
+            return None
+    delta = datetime.now(timezone.utc).replace(tzinfo=None) - finished
+    return max(0.0, delta.total_seconds() / 3600.0)

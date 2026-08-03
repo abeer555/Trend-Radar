@@ -9,6 +9,7 @@ import { fmtINR } from "@/lib/format";
 import FilterBar, { EMPTY_FILTERS, type Filters } from "./FilterBar";
 import Sparkline from "./Sparkline";
 import ScoreBar from "./ScoreBar";
+import WatchlistButton from "./WatchlistButton";
 
 interface Props {
   rows:    LeaderboardRow[];
@@ -100,6 +101,8 @@ export default function LeaderboardTable({ rows, sectors }: Props) {
     minPrice: searchParams.get("price")  ?? "",
     tt:       searchParams.get("tt")  === "1",
     vcp:      searchParams.get("vcp") === "1",
+    volumeSurge:    searchParams.get("vol")  === "1",
+    minProximity:   searchParams.get("prox") ?? "",
   }));
   const [sortField, setSortField] = useState<SortField>(() => {
     const s = searchParams.get("sort") as SortField | null;
@@ -112,12 +115,14 @@ export default function LeaderboardTable({ rows, sectors }: Props) {
   // Mirror state back into the URL (replaceState avoids a server round-trip).
   useEffect(() => {
     const p = new URLSearchParams();
-    if (filters.query)    p.set("q", filters.query);
-    if (filters.sector)   p.set("sector", filters.sector);
-    if (filters.minRS)    p.set("rs", filters.minRS);
-    if (filters.minPrice) p.set("price", filters.minPrice);
-    if (filters.tt)       p.set("tt", "1");
-    if (filters.vcp)      p.set("vcp", "1");
+    if (filters.query)        p.set("q", filters.query);
+    if (filters.sector)       p.set("sector", filters.sector);
+    if (filters.minRS)        p.set("rs", filters.minRS);
+    if (filters.minPrice)     p.set("price", filters.minPrice);
+    if (filters.tt)           p.set("tt", "1");
+    if (filters.vcp)          p.set("vcp", "1");
+    if (filters.volumeSurge)  p.set("vol", "1");
+    if (filters.minProximity) p.set("prox", filters.minProximity);
     if (sortField !== "composite_score") p.set("sort", sortField);
     if (sortDir !== "desc")              p.set("dir", sortDir);
     const qs = p.toString();
@@ -142,11 +147,13 @@ export default function LeaderboardTable({ rows, sectors }: Props) {
         x.ticker.toLowerCase().includes(q) || (x.name ?? "").toLowerCase().includes(q)
       );
     }
-    if (filters.sector)   r = r.filter(x => x.sector === filters.sector);
-    if (filters.minPrice) r = r.filter(x => (x.last_price ?? 0) >= Number(filters.minPrice));
-    if (filters.minRS)    r = r.filter(x => (x.rs_rank ?? 0)    >= Number(filters.minRS));
+    if (filters.sector)       r = r.filter(x => x.sector === filters.sector);
+    if (filters.minPrice)     r = r.filter(x => (x.last_price ?? 0)      >= Number(filters.minPrice));
+    if (filters.minRS)        r = r.filter(x => (x.rs_rank ?? 0)         >= Number(filters.minRS));
+    if (filters.minProximity) r = r.filter(x => (x.high_proximity ?? 0)  >= Number(filters.minProximity));
+    if (filters.volumeSurge)  r = r.filter(x => !!x.volume_surge || !!x.pocket_pivot);
     return r;
-  }, [rows, filters.query, filters.sector, filters.minPrice, filters.minRS]);
+  }, [rows, filters.query, filters.sector, filters.minPrice, filters.minRS, filters.minProximity, filters.volumeSurge]);
 
   // NB: the API serialises SQLite booleans as 0/1, so use truthy checks, not === true.
   const ttCount  = useMemo(() => base.filter(x => !!x.trend_template_pass).length, [base]);
@@ -250,12 +257,15 @@ export default function LeaderboardTable({ rows, sectors }: Props) {
               <tr
                 key={row.ticker}
                 className="group cursor-pointer transition-colors hover:bg-surface-2/60"
-                onClick={() => router.push(`/stock/${row.ticker}`)}
+                onClick={() => router.push(`/stock/${encodeURIComponent(row.ticker)}`)}
               >
                 <td className={clsx("px-3 py-2.5 text-xs tabular-nums", rankClass(i))}>{i + 1}</td>
                 <td className="px-3 py-2.5">
-                  <div className="font-mono text-[13px] font-semibold text-text">
-                    <Ticker t={row.ticker} />
+                  <div className="flex items-center gap-1.5">
+                    <div className="font-mono text-[13px] font-semibold text-text">
+                      <Ticker t={row.ticker} />
+                    </div>
+                    <WatchlistButton ticker={row.ticker} />
                   </div>
                   <div className="max-w-[180px] truncate text-xs text-muted">{row.name ?? "—"}</div>
                 </td>

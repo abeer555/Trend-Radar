@@ -3,40 +3,93 @@
 @tailwind utilities;
 
 :root {
-  --bg:      #0b0d12;
-  --surface: #11141c;
-  --border:  #232936;
+  --bg:          #080a0f;
+  --surface:     #0f131c;
+  --border:      #232b3d;
+  --accent:      #4f8eff;
+  --bull:        #2fd672;
+  --bear:        #ff5257;
 }
 
 * { box-sizing: border-box; }
 
+html {
+  /* Prevent pull-to-refresh overscroll whitespace at top/bottom of app */
+  overscroll-behavior: none;
+}
+
 html, body {
   background: var(--bg);
-  color: #e7ebf3;
+  color: #eef2fa;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
-/* Scrollbar */
+/* Subtle background texture: a barely-visible top glow, like a trading terminal */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 400px;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(79, 142, 255, 0.08), transparent),
+    radial-gradient(ellipse 60% 40% at 80% -10%, rgba(124, 108, 255, 0.05), transparent);
+  z-index: -1;
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #232b3d transparent;
+}
+
+/* WebKit scrollbar */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #232936; border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #323b4d; }
+::-webkit-scrollbar-thumb { background: #232b3d; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #374258; }
 
-/* Badge */
-.badge {
-  @apply inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium;
+::selection { background: rgba(79, 142, 255, 0.3); }
+
+/* Focus ring — visible for keyboard nav, invisible for mouse clicks */
+:focus-visible {
+  outline: 2px solid rgba(79, 142, 255, 0.55);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
-.badge-bull  { @apply bg-bull/10 text-bull; }
-.badge-bear  { @apply bg-bear/10 text-bear; }
-.badge-warn  { @apply bg-warn/10 text-warn; }
+
+/* ---- Badges ---------------------------------------------------------- */
+.badge {
+  @apply inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap;
+}
+.badge-bull  { @apply bg-bull/10  text-bull;  }
+.badge-bear  { @apply bg-bear/10  text-bear;  }
+.badge-warn  { @apply bg-warn/10  text-warn;  }
 .badge-blue  { @apply bg-accent/10 text-accent; }
-.badge-muted { @apply bg-white/5 text-text-dim; }
+.badge-muted { @apply bg-white/5  text-text-dim; }
 
-/* Score bar */
-.score-bar-track { @apply h-1.5 w-full rounded-full bg-white/[0.06]; }
-.score-bar-fill  { @apply h-1.5 rounded-full transition-all; }
+/* ---- Score bars ------------------------------------------------------- */
+.score-bar-track {
+  @apply h-1.5 w-full rounded-full bg-white/[0.05] overflow-hidden;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.25);
+}
+.score-bar-fill {
+  @apply h-1.5 rounded-full transition-all;
+  /* Subtle top highlight → feels "lit up" */
+  background-image: linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0) 55%);
+}
 
-/* Motion */
+/* ---- Cards ------------------------------------------------------------ */
+.card {
+  @apply rounded-xl border border-border bg-surface shadow-card;
+}
+.card-hover {
+  @apply transition-all hover:border-border-strong hover:bg-surface-2/40;
+}
+
+/* ---- Animations ------------------------------------------------------- */
 @keyframes fade-up {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: none; }
@@ -44,6 +97,7 @@ html, body {
 .fade-up   { animation: fade-up 0.4s ease-out both; }
 .fade-up-1 { animation-delay: 0.06s; }
 .fade-up-2 { animation-delay: 0.12s; }
+.fade-up-3 { animation-delay: 0.18s; }
 
 @keyframes pop-in {
   from { opacity: 0; transform: scale(0.98) translateY(-2px); }
@@ -51,6 +105,18 @@ html, body {
 }
 .pop-in { animation: pop-in 0.12s ease-out both; }
 
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.55; }
+}
+.pulse-glow { animation: pulse-glow 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(8px); }
+  to   { opacity: 1; transform: none; }
+}
+.slide-in-right { animation: slide-in-right 0.3s ease-out both; }
+
 @media (prefers-reduced-motion: reduce) {
-  .fade-up, .pop-in { animation: none; }
+  .fade-up, .pop-in, .pulse-glow, .slide-in-right { animation: none; }
 }

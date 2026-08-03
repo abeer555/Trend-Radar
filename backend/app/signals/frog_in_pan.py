@@ -9,11 +9,14 @@ Information Discreteness (ID):
 
 Where r = 12-1 return.
 
-Interpretation:
-  − ID < 0  → returns dominated by few large jumps (Frog-in-Pan: BAD)
-  − ID > 0  → returns built from many small moves (continuous momentum: GOOD)
+Interpretation (Bhattacharya & Galpin convention — opposite of intuition,
+so read carefully):
+  − ID < 0  → for a *gainer*, means %pos > %neg → returns came from many
+             small same-sign moves → continuous information → GOOD
+  − ID > 0  → for a *gainer*, means %neg > %pos → the gain came from a few
+             big up-jumps amid many small down days → FROG-IN-PAN: BAD
 
-We invert for scoring: high continuous momentum → high FIP score (0-100).
+We score HIGH when ID is LOW (more continuous momentum).
 """
 
 from __future__ import annotations

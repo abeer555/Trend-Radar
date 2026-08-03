@@ -117,9 +117,22 @@ MANSFIELD_MA_PERIOD       = 30      # 30-week (150-day) moving average
 # Scheduler (market-close scan)
 # ---------------------------------------------------------------------------
 # NSE close: 15:30 IST = 10:00 UTC.  Change for S&P 500: 21:00 UTC (4 PM ET).
-SCHEDULER_HOUR_UTC   = 10
-SCHEDULER_MINUTE_UTC = 15
-SCHEDULER_TIMEZONE   = "UTC"
+SCHEDULER_HOUR_UTC   = int(os.environ.get("SCHEDULER_HOUR_UTC", "10"))
+SCHEDULER_MINUTE_UTC = int(os.environ.get("SCHEDULER_MINUTE_UTC", "15"))
+SCHEDULER_TIMEZONE   = os.environ.get("SCHEDULER_TIMEZONE", "UTC")
+# Set DISABLE_SCHEDULER=1 on a laptop you close frequently — the scheduler
+# is only useful when the process stays up 24/7.
+DISABLE_SCHEDULER    = os.environ.get("DISABLE_SCHEDULER", "0").lower() in {"1", "true", "yes"}
+
+# ---------------------------------------------------------------------------
+# Auto-scan on startup  (for the "run the backend on my laptop for 5 min" flow)
+# ---------------------------------------------------------------------------
+# When True, the server starts a scan in the background as soon as it boots
+# if the most recent completed scan is missing or older than STALE_SCAN_MAX_AGE_HOURS.
+AUTO_SCAN_ON_STARTUP: bool = os.environ.get("AUTO_SCAN_ON_STARTUP", "true").lower() in {"1", "true", "yes"}
+# A completed scan older than this many hours is considered stale and triggers
+# an auto-scan on next startup.  18h default → after NSE close, next morning is stale.
+STALE_SCAN_MAX_AGE_HOURS: int = int(os.environ.get("STALE_SCAN_MAX_AGE_HOURS", "18"))
 
 # ---------------------------------------------------------------------------
 # API
