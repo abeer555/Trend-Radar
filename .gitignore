@@ -1,6 +1,6 @@
 # Claude Code
 .claude/
-
+.zcode/
 # Python
 __pycache__/
 *.py[cod]
@@ -26,6 +26,10 @@ env/
 # yfinance / data cache
 backend/cache/
 backend/data/*.pkl
+
+# Static offline snapshot is intentionally NOT ignored — committing
+# frontend/public/data/ lets the deployed frontend serve the last scan
+# even while the backend is down.
 
 # Node
 node_modules/

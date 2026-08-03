@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { RefreshCw } from "lucide-react";
 import { triggerScan, fetchScanStatus } from "@/lib/api";
+import { useOfflineStatus } from "@/lib/offline";
 
 type Status = {
   status?: string;
@@ -30,63 +31,80 @@ function fmtAge(hours: number | null | undefined): string {
  *     missing entirely.
  *   - One click POSTs /api/scan to trigger a background scan.
  *   - Polls /api/scan/status while running so you see `Running…` live.
+ *
+ * Implementation note: this uses a single self-arming `setTimeout` chain so the
+ * polling cadence can change (3s while scanning, 60s idle) without re-running
+ * effects when `status` changes — the naive `useEffect(..., [status])` pattern
+ * created an update loop on first mount.
  */
 export default function RefreshControl() {
-  const [status, setStatus]     = useState<Status | null>(null);
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState(false);
-  const pollRef                 = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [status, setStatus]   = useState<Status | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState(false);
+  const timerRef              = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { offline, source }   = useOfflineStatus();
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (): Promise<boolean> => {
     try {
-      const s = await fetchScanStatus();
-      setStatus(s as Status);
+      const s = (await fetchScanStatus()) as Status;
+      setStatus(s);
       setError(false);
+      return Boolean(s.is_running);
     } catch {
       setError(true);
+      return false;
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Initial load + poll while a scan is running (and slowly otherwise).
+  // Self-arming polling loop — re-schedules itself with a cadence that
+  // depends on whether a scan is running, without re-triggering React effects.
   useEffect(() => {
-    refresh();
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    let cancelled = false;
 
-  useEffect(() => {
-    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
-    // Poll every 3s while a scan is running, otherwise every 60s.
-    const intervalMs = status?.is_running ? 3000 : 60000;
-    pollRef.current = setInterval(refresh, intervalMs);
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [status?.is_running, refresh]);
+    async function tick() {
+      const running = await refresh();
+      if (cancelled) return;
+      timerRef.current = setTimeout(tick, running ? 3000 : 60000);
+    }
+
+    tick();
+    return () => {
+      cancelled = true;
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [refresh]);
 
   async function handleRefresh() {
-    if (status?.is_running) return;
+    if (status?.is_running || offline) return;
     try {
       await triggerScan();
-      // Immediately show as running, then keep polling to pick up completion.
+      // Immediately show as running, then let the poll loop pick up completion.
       setStatus((s) => ({ ...s, is_running: true, status: "running" }));
-      refresh();
     } catch {
       setError(true);
     }
   }
 
-  const isRunning = Boolean(status?.is_running);
+  const isRunning = Boolean(status?.is_running) || Boolean(status?.status === "running");
   const hasData   = Boolean(status?.has_data);
   const isStale   = Boolean(status?.is_stale);
   const ageHours  = status?.data_age_hours ?? null;
 
-  // Choose colour trio
   let dotClass   = "bg-accent";
   let textClass  = "text-muted";
   let label      = "Scan status unknown";
 
-  if (error) {
+  if (offline && (source === "cache" || source === "snapshot")) {
+    // Backend is down but fallback data was served — distinguish from both a
+    // hard failure and a healthy live connection.
+    dotClass  = "bg-warn";
+    textClass = "text-warn";
+    label     = ageHours != null
+      ? `Offline — cached data (${fmtAge(ageHours)} old)`
+      : "Offline — cached data";
+  } else if (error) {
     dotClass  = "bg-bear";
     textClass = "text-bear";
     label     = "Backend unreachable";
@@ -114,11 +132,13 @@ export default function RefreshControl() {
     <button
       type="button"
       onClick={handleRefresh}
-      disabled={isRunning || loading}
+      disabled={isRunning || loading || offline}
       title={
         isRunning
           ? "A scan is already running on the backend"
-          : "Trigger a fresh scan on the backend"
+          : offline
+            ? "Backend is offline — start it to run a fresh scan"
+            : "Trigger a fresh scan on the backend"
       }
       className={[
         "group inline-flex items-center gap-1.5 rounded-md border border-border",

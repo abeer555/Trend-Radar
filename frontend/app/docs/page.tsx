@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import {
   BarChart3, TrendingUp, Target, Search, Filter,
   ArrowUpRight, CheckCircle2, AlertTriangle, BookOpen,
-  ChevronRight, Activity, Layers,
+  ChevronRight, Activity, Layers, WifiOff,
 } from "lucide-react";
 
 export const metadata: Metadata = {
@@ -21,6 +21,7 @@ const NAV = [
   { id: "filters",     label: "Filters & Search" },
   { id: "watchlist",   label: "Watchlist" },
   { id: "compare",     label: "Compare" },
+  { id: "offline",     label: "Offline mode" },
   { id: "selfhost",    label: "Self-hosting" },
   { id: "disclaimer",  label: "Disclaimer" },
 ];
@@ -478,6 +479,39 @@ export default function DocsPage() {
               obvious, plus winner-highlighted rows for composite, RS rank, trend template, ADX,
               valuation, and risk metrics.
             </p>
+          </Section>
+
+          {/* ── OFFLINE MODE ─────────────────────────────────── */}
+          <Section id="offline" title="Offline mode &amp; refresh" icon={WifiOff}>
+            <p>
+              TrendRadar is designed around an intermittent backend: run it once (or let the
+              daily scheduler run) and the site keeps working after you shut it down.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Term name="Three data tiers">
+                Every page first asks the live backend.  If it is unreachable the site
+                serves (1) the last successful responses cached in your browser, or
+                (2) a static snapshot of the last completed scan shipped with the site
+                itself.  You always see <em>data</em>, just possibly older data.
+              </Term>
+              <Term name="Nav-bar status pill">
+                The refresh button in the top bar doubles as a status light:
+                green = live and fresh, amber = data is stale or you are
+                reading cached/snapshot data (label shows the age), red = backend
+                unreachable and nothing cached yet.  Scanning requires the backend.
+              </Term>
+            </div>
+            <Card>
+              <p>
+                <strong className="text-text">How the snapshot is made:</strong> after every
+                completed scan the backend exports the full dataset (leaderboard, all 500
+                stock details, and price charts) as JSON into{" "}
+                <code className="font-mono text-accent">frontend/public/data/</code>.  Commit
+                those files and your deployed frontend survives any backend downtime —
+                no database, no API, fully static.  Disable the export with{" "}
+                <code className="font-mono">STATIC_EXPORT_DIR=</code> (empty value).
+              </p>
+            </Card>
           </Section>
 
           {/* ── SELF-HOSTING ─────────────────────────────────── */}

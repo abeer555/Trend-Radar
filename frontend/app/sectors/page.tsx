@@ -1,13 +1,12 @@
+"use client";
+
+import { useEffect, useState, useMemo } from "react";
 import { fetchLeaderboard } from "@/lib/api";
 import type { LeaderboardRow } from "@/lib/types";
 import { fmtNum } from "@/lib/format";
-import { fmtINR } from "@/lib/format";
 import Link from "next/link";
 import clsx from "clsx";
 import { TrendingUp, ChevronRight } from "lucide-react";
-
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
 
 interface SectorStats {
   sector:         string;
@@ -49,9 +48,19 @@ function aggregate(rows: LeaderboardRow[]): SectorStats[] {
     .sort((a, b) => b.avgScore - a.avgScore);
 }
 
-export default async function SectorsPage() {
-  const rows = await fetchLeaderboard({ limit: 500 }).catch(() => [] as LeaderboardRow[]);
-  const sectors = aggregate(rows);
+export default function SectorsPage() {
+  const [rows, setRows] = useState<LeaderboardRow[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchLeaderboard({ limit: 500 })
+      .then((data) => { if (!cancelled) setRows(data); })
+      .catch(() => { if (!cancelled) setRows([]); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const sectors = useMemo(() => aggregate(rows ?? []), [rows]);
+  const loading = rows === null;
 
   return (
     <div className="fade-up flex flex-col gap-6">
@@ -62,7 +71,11 @@ export default async function SectorsPage() {
         </p>
       </div>
 
-      {sectors.length === 0 ? (
+      {loading ? (
+        <div className="flex h-64 items-center justify-center rounded-xl border border-border bg-surface">
+          <p className="text-sm text-muted">Loading…</p>
+        </div>
+      ) : sectors.length === 0 ? (
         <div className="flex h-64 items-center justify-center rounded-xl border border-border bg-surface">
           <p className="text-sm text-muted">No sector data yet — run a scan first.</p>
         </div>

@@ -7,6 +7,7 @@ import clsx from "clsx";
 import { fetchStock, fetchChartData, fetchLeaderboard } from "@/lib/api";
 import type { StockDetail, ChartData, LeaderboardRow } from "@/lib/types";
 import { fmtINR, fmtPct, fmtNum, fmtMarketCap } from "@/lib/format";
+import { useOfflineStatus } from "@/lib/offline";
 import ScoreBar from "@/components/ScoreBar";
 import WatchlistButton from "@/components/WatchlistButton";
 
@@ -98,6 +99,7 @@ function normalizeArr(values: number[], n: number): number[] {
 
 export default function ComparePage() {
   const searchParams = useSearchParams();
+  const { offline } = useOfflineStatus();
   const [aTicker, setATicker] = useState(searchParams.get("a") ?? "RELIANCE.NS");
   const [bTicker, setBTicker] = useState(searchParams.get("b") ?? "TCS.NS");
   const [aStock, setAStock] = useState<StockDetail | null>(null);
@@ -291,11 +293,13 @@ export default function ComparePage() {
           </table>
         </div>
       ) : (
-        <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-border bg-surface/50">
+        <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-border bg-surface/50 px-4 text-center">
           <p className="flex items-center gap-2 text-sm text-muted">
             {anyLoading
               ? <>Loading comparison…</>
-              : <><Minus className="h-4 w-4" /> Pick two tickers above to compare them side-by-side.</>}
+              : offline && !aStock && !bStock
+                ? <><Minus className="h-4 w-4" /> Backend is offline and these tickers aren&apos;t in the cached snapshot.</>
+                : <><Minus className="h-4 w-4" /> Pick two tickers above to compare them side-by-side.</>}
           </p>
         </div>
       )}

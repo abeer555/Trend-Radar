@@ -68,11 +68,9 @@ def get_leaderboard(
     limit:          int = Query(100, ge=1, le=500),
     scan_date:      str | None = Query(None, description="YYYY-MM-DD; defaults to latest"),
 ):
-    engine = get_engine()
     sd = date.fromisoformat(scan_date) if scan_date else None
-
-    rows = load_leaderboard(
-        engine         = engine,
+    return build_leaderboard_payload(
+        get_engine(),
         scan_date      = sd,
         sector         = sector,
         min_price      = min_price,
@@ -81,6 +79,34 @@ def get_leaderboard(
         vcp            = vcp,
         sort_by        = sort_by,
         descending     = order == "desc",
+        limit          = limit,
+    )
+
+
+def build_leaderboard_payload(
+    engine,
+    *,
+    scan_date:      date | None = None,
+    sector:         str | None = None,
+    min_price:      float | None = None,
+    min_rs:         float | None = None,
+    trend_template: bool | None = None,
+    vcp:            bool | None = None,
+    sort_by:        str = "composite_score",
+    descending:     bool = True,
+    limit:          int = 100,
+) -> list[dict]:
+    """Shared leaderboard shaping — used by GET /leaderboard and the static exporter."""
+    rows = load_leaderboard(
+        engine         = engine,
+        scan_date      = scan_date,
+        sector         = sector,
+        min_price      = min_price,
+        min_rs         = min_rs,
+        trend_template = trend_template,
+        vcp            = vcp,
+        sort_by        = sort_by,
+        descending     = descending,
         limit          = limit,
     )
 
@@ -103,12 +129,23 @@ def get_leaderboard(
 
 @router.get("/stock/{ticker}")
 def get_stock(ticker: str, scan_date: str | None = Query(None)) -> dict[str, Any]:
-    engine = get_engine()
-    sd = date.fromisoformat(scan_date) if scan_date else None
-
-    row = load_scan_result(ticker.upper(), engine, scan_date=sd)
+    sd  = date.fromisoformat(scan_date) if scan_date else None
+    row = build_stock_payload(ticker.upper(), get_engine(), scan_date=sd)
     if row is None:
         raise HTTPException(status_code=404, detail=f"No data for ticker {ticker!r}")
+    return row
+
+
+def build_stock_payload(ticker: str, engine, scan_date: date | None = None) -> dict[str, Any] | None:
+    """
+    Assemble the full stock-detail payload exactly as GET /stock/{ticker}
+    returns it.  Returns None when the ticker has no scan row.
+
+    Shared with the static exporter so offline clients see identical shapes.
+    """
+    row = load_scan_result(ticker, engine, scan_date=scan_date)
+    if row is None:
+        return None
 
     # Parse JSON blobs
     for key in ("sparkline_json", "top_factors_json"):
@@ -135,8 +172,7 @@ def get_stock(ticker: str, scan_date: str | None = Query(None)) -> dict[str, Any
     row["entry_signal"] = _entry_signal(row)
 
     # Trend template criteria (stored as JSON booleans from scanner)
-    # Re-compute from price data for the detail view
-    row["trend_template_criteria"] = _get_tt_criteria(ticker.upper(), row)
+    row["trend_template_criteria"] = _get_tt_criteria(ticker, row)
 
     return row
 
@@ -185,20 +221,48 @@ def scan_status() -> dict:
     with _scan_lock:
         running = _scan_running
 
-    # The DB `status='running'` row can exist without the in-process flag being
-    # set when the server restarted mid-scan; recovery on startup flips those to
-    # 'failed', so here they should agree.
-    is_stale = age_hours is None or age_hours > _stale_threshold()
+    return {
+        **build_status_payload(
+            engine,
+            is_running = running,
+            last       = last,
+            completed  = completed,
+            age_hours  = age_hours,
+        ),
+        "server_time": datetime.utcnow().isoformat() + "Z",
+    }
+
+
+def build_status_payload(
+    engine,
+    *,
+    is_running: bool,
+    last:      dict | None = None,
+    completed: dict | None = None,
+    age_hours: float | None = None,
+) -> dict:
+    """
+    Scan-status dict shared by GET /scan/status and the static exporter.
+
+    The live endpoint adds `server_time` on top of this.  `data_age_hours` and
+    `is_stale` are computed against *now*, so when the exporter writes a static
+    copy the frontend recomputes both from `last_completed_at` at read time.
+    """
+    if last is None:
+        last = get_last_scan_status(engine)
+    if completed is None:
+        completed = get_last_completed_scan(engine)
+    if age_hours is None:
+        age_hours = latest_completed_scan_age_hours(engine)
 
     return {
         **(last or {"status": "no_scan_run"}),
-        "is_running":            running,
+        "is_running":            is_running,
         "has_data":              completed is not None,
         "last_completed_at":     (completed or {}).get("finished_at"),
         "data_age_hours":        round(age_hours, 2) if age_hours is not None else None,
-        "is_stale":              is_stale,
+        "is_stale":              age_hours is None or age_hours > _stale_threshold(),
         "stale_threshold_hours": _stale_threshold(),
-        "server_time":           datetime.utcnow().isoformat() + "Z",
     }
 
 
@@ -267,12 +331,27 @@ def get_chart_data(
     ticker: str,
     days:   int = Query(365, ge=30, le=730),
 ) -> dict[str, Any]:
+    payload = build_chart_payload(ticker.upper(), days=days)
+    if payload is None:
+        raise HTTPException(status_code=404, detail=f"No price data for {ticker!r}")
+    return payload
+
+
+def build_chart_payload(ticker: str, days: int = 365) -> dict[str, Any] | None:
+    """
+    Assemble the OHLCV + MA/BB chart payload exactly as GET /stock/{t}/chart
+    returns it.  Returns None when there is no price data.
+
+    Shared with the static exporter.  NOTE: the underlying get_price_df may
+    trigger a live yfinance download when the local cache is stale — during
+    export right after a scan the cache is fresh, so this stays fully offline.
+    """
     from app.data.fetcher import get_price_df
     import numpy as np
 
-    df = get_price_df(ticker.upper())
+    df = get_price_df(ticker)
     if df is None or df.empty:
-        raise HTTPException(status_code=404, detail=f"No price data for {ticker!r}")
+        return None
 
     df = df.tail(days)
 

@@ -6,6 +6,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import CommandPalette from "@/components/CommandPalette";
 import RefreshControl from "@/components/RefreshControl";
+import { OfflineProvider } from "@/lib/offline";
 import "./globals.css";
 
 const plexSans = IBM_Plex_Sans({
@@ -57,6 +58,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${plexSans.variable} ${plexMono.variable}`}>
       <body className="flex min-h-screen flex-col bg-bg font-sans text-text antialiased">
+        <OfflineProvider>
         <nav className="sticky top-0 z-50 border-b border-border/70 bg-surface/70 backdrop-blur-xl backdrop-saturate-150">
           <div className="mx-auto flex h-14 w-full max-w-screen-2xl items-center justify-between gap-3 px-4">
             <Link href="/" className="flex items-center gap-2.5 shrink-0">
@@ -140,6 +142,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
           </div>
         </footer>
+        </OfflineProvider>
       </body>
     </html>
   );

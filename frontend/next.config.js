@@ -11,6 +11,16 @@ const nextConfig = {
       },
     ];
   },
+  async headers() {
+    return [
+      {
+        // The offline snapshot is regenerated after every backend scan — never
+        // let a CDN/browser keep a stale copy.
+        source: "/data/:path*",
+        headers: [{ key: "Cache-Control", value: "no-cache" }],
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;

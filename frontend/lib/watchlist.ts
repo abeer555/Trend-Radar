@@ -4,17 +4,28 @@ import { useSyncExternalStore } from "react";
 
 const KEY = "trendradar.watchlist.v1";
 
-/** Read the watchlist from localStorage.  Safe on SSR (returns empty set). */
-function read(): Set<string> {
-  if (typeof window === "undefined") return new Set();
+function rawRead(): string | null {
+  if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(KEY);
-    if (!raw) return new Set();
+    return window.localStorage.getItem(KEY);
+  } catch {
+    return null;
+  }
+}
+
+function parse(raw: string | null): Set<string> {
+  if (!raw) return new Set();
+  try {
     const arr = JSON.parse(raw);
     return new Set(Array.isArray(arr) ? arr.filter((s) => typeof s === "string") : []);
   } catch {
     return new Set();
   }
+}
+
+/** Read the watchlist from localStorage.  Safe on SSR (returns empty set). */
+function read(): Set<string> {
+  return parse(rawRead());
 }
 
 function write(set: Set<string>) {
@@ -43,8 +54,25 @@ function subscribe(fn: () => void) {
   };
 }
 
+/**
+ * Cached snapshot.
+ *
+ * `useSyncExternalStore` requires `getSnapshot` to return the SAME object
+ * reference until the store actually changes — returning a fresh Set every
+ * call makes React think the store changed on every render and loops forever
+ * ("Maximum update depth exceeded").  We cache by the raw localStorage string
+ * and only re-parse when it changes.
+ */
+let cachedRaw: string | null | undefined; // undefined = not yet read
+let cachedSet: Set<string> = new Set();
+
 function getSnapshot(): Set<string> {
-  return read();
+  const raw = rawRead();
+  if (raw !== cachedRaw) {
+    cachedRaw = raw;
+    cachedSet = parse(raw);
+  }
+  return cachedSet;
 }
 
 const SERVER_SNAPSHOT = new Set<string>();

@@ -6,9 +6,11 @@ import { fetchLeaderboard } from "@/lib/api";
 import type { LeaderboardRow } from "@/lib/types";
 import LeaderboardTable from "@/components/LeaderboardTable";
 import { useWatchlist } from "@/lib/watchlist";
+import { useOfflineStatus } from "@/lib/offline";
 
 export default function WatchlistPage() {
   const { watchlist } = useWatchlist();
+  const { offline }   = useOfflineStatus();
   const [rows, setRows]         = useState<LeaderboardRow[] | null>(null);
   const [sectors, setSectors]   = useState<string[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -56,8 +58,12 @@ export default function WatchlistPage() {
         </div>
       ) : error ? (
         <div className="flex h-64 flex-col items-center justify-center gap-2 rounded-xl border border-border bg-surface text-center">
-          <p className="font-medium text-text">Couldn't load leaderboard</p>
-          <p className="text-sm text-muted">Check that the backend server is running and reachable.</p>
+          <p className="font-medium text-text">Couldn&apos;t load leaderboard</p>
+          <p className="max-w-sm text-sm text-muted">
+            {offline
+              ? "Backend is offline and no cached or snapshot data is available yet — run the backend once to create a snapshot."
+              : "Check that the backend server is running and reachable."}
+          </p>
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex h-64 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border bg-surface/50 text-center">

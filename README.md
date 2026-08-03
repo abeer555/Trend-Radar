@@ -103,7 +103,25 @@ The two you'll most likely touch:
 | `STALE_SCAN_MAX_AGE_HOURS` | `18` | How old (hours) the last scan must be before auto-scan kicks in |
 | `DISABLE_SCHEDULER` | `0` | Set to `1` on a laptop to skip the fixed-hour cron |
 | `SQLITE_DB_PATH` | `market_predictor.db` | Where scan results + price cache are stored |
+| `STATIC_EXPORT_DIR` | `frontend/public/data` | Where the post-scan static snapshot is written (repo-root relative); set empty to disable |
 | `CORS_ORIGINS` | — | Extra allowed origins (comma-separated) |
+
+## Offline frontend (run the backend once, browse forever)
+
+After every completed scan the backend exports the full dataset — leaderboard,
+all stock details, and price charts — as static JSON into
+`frontend/public/data/`.  The frontend automatically falls back to a
+browser-cache copy and then to that snapshot whenever the API is unreachable,
+so the site keeps working after you Ctrl+C the backend (and on Vercel while
+your laptop is off, if you commit the snapshot).
+
+- Nav-bar pill turns amber ("Offline — cached data") whenever fallback data is
+  being served; scanning stays available only while the backend is live.
+- Snapshot is ~55 MB for the Nifty 500 universe (charts dominate).  Check with
+  `cd frontend && npm run snapshot-size`.
+- The files are meant to be committed — that is what makes the deployed site
+  survive backend downtime.
+
 
 ## Running tests
 

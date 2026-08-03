@@ -152,6 +152,15 @@ def _run_full_scan_impl(engine, log_id: int, force_refresh: bool = False) -> dic
     status = "completed" if errors == 0 else f"completed_with_{errors}_errors"
     log_scan_end(log_id, scanned, status, None, engine)
     log.info("Scan complete: %d scanned, %d errors.", scanned, errors)
+
+    # Static JSON snapshot for the offline frontend.  Best-effort: a failed
+    # export must never mark an otherwise good scan as failed.
+    try:
+        from app.exporter import export_static_snapshot
+        export_static_snapshot(engine)
+    except Exception:
+        log.exception("Static snapshot export failed (scan itself is fine)")
+
     return {"scanned": scanned, "errors": errors, "scan_date": str(scan_dt)}
 
 

@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "snapshot-size": "du -sh public/data 2>/dev/null || echo 'no snapshot yet — run a backend scan first'"
   },
   "dependencies": {
     "@tanstack/react-table": "^8.17.3",

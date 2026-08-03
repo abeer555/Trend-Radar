@@ -135,6 +135,16 @@ AUTO_SCAN_ON_STARTUP: bool = os.environ.get("AUTO_SCAN_ON_STARTUP", "true").lowe
 STALE_SCAN_MAX_AGE_HOURS: int = int(os.environ.get("STALE_SCAN_MAX_AGE_HOURS", "18"))
 
 # ---------------------------------------------------------------------------
+# Static snapshot export (offline frontend)
+# ---------------------------------------------------------------------------
+# After every completed scan the exporter writes the full dataset as static
+# JSON (leaderboard, sectors, status, per-stock detail+chart) so the frontend
+# keeps working when the backend is off.  Relative paths resolve against the
+# repo root.  Commit the output if your deployed frontend must survive
+# backend downtime.  Set STATIC_EXPORT_DIR="" to disable exporting.
+STATIC_EXPORT_DIR = os.environ.get("STATIC_EXPORT_DIR", "frontend/public/data")
+
+# ---------------------------------------------------------------------------
 # API
 # ---------------------------------------------------------------------------
 LEADERBOARD_DEFAULT_LIMIT = 100
