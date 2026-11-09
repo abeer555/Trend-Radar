@@ -4,7 +4,7 @@ Full-universe scanner.
 Runs after market close (triggered by scheduler.py or the /api/scan endpoint).
 Steps:
   1. Load universe from config.
-  2. Ensure prices are cached in SQLite.
+  2. Refresh prices from yfinance and cache them in SQLite.
   3. Compute all signals for every ticker.
   4. Rank RS across the universe.
   5. Upsert scan_results rows.
@@ -24,9 +24,9 @@ import pandas as pd
 from app.config import PRICE_HISTORY_DAYS, LEADERBOARD_DEFAULT_LIMIT
 from app.data.fetcher import (
     ensure_fundamentals,
-    ensure_prices,
     get_fundamentals,
     get_price_df,
+    refresh_prices,
 )
 from app.data.universe import load_universe
 from app.database import (
@@ -49,7 +49,7 @@ from app.signals.volume import compute_volume
 log = logging.getLogger(__name__)
 
 
-def run_full_scan(force_refresh: bool = False) -> dict[str, Any]:
+def run_full_scan() -> dict[str, Any]:
     """
     Execute a full universe scan.  Returns a summary dict.
 
@@ -61,7 +61,7 @@ def run_full_scan(force_refresh: bool = False) -> dict[str, Any]:
     engine   = get_engine()
     log_id   = log_scan_start(engine)
     try:
-        return _run_full_scan_impl(engine, log_id, force_refresh=force_refresh)
+        return _run_full_scan_impl(engine, log_id)
     except Exception as exc:
         try:
             log_scan_end(log_id, 0, "failed", str(exc)[:500], engine)
@@ -70,7 +70,7 @@ def run_full_scan(force_refresh: bool = False) -> dict[str, Any]:
         raise
 
 
-def _run_full_scan_impl(engine, log_id: int, force_refresh: bool = False) -> dict[str, Any]:
+def _run_full_scan_impl(engine, log_id: int) -> dict[str, Any]:
     scan_dt  = date.today()
     universe = load_universe()
     tickers  = [s.ticker for s in universe]
@@ -79,13 +79,13 @@ def _run_full_scan_impl(engine, log_id: int, force_refresh: bool = False) -> dic
     log.info("Starting scan for %d tickers (date=%s)", len(tickers), scan_dt)
 
     # ── Step 1: Bulk-download prices ──────────────────────────────────────
-    ensure_prices(tickers, force_refresh=force_refresh)
+    refresh_prices(tickers)
 
     # ── Step 2: Load benchmark for Mansfield RS ───────────────────────────
     from app.config import UNIVERSE
     benchmark_ticker = "^NSEI" if UNIVERSE == "nifty500" else "^GSPC"
     try:
-        ensure_prices([benchmark_ticker], force_refresh=force_refresh)
+        refresh_prices([benchmark_ticker])
         bench_df = get_price_df(benchmark_ticker)
     except Exception:
         bench_df = pd.DataFrame()

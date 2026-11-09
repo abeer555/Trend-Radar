@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Sequence
 
 import numpy as np
@@ -30,7 +30,6 @@ except Exception:
     pass
 
 from app.config import (
-    CACHE_PRICE_HOURS,
     FUNDAMENTALS_CACHE_DAYS,
     PRICE_HISTORY_DAYS,
     YFINANCE_CHUNK,
@@ -51,32 +50,21 @@ log = logging.getLogger(__name__)
 # Public API
 # ---------------------------------------------------------------------------
 
-def ensure_prices(tickers: Sequence[str], force_refresh: bool = False) -> None:
+def refresh_prices(tickers: Sequence[str]) -> None:
     """
-    Make sure SQLite has up-to-date OHLCV for every ticker.
-    Skips a ticker if its data is fresher than CACHE_PRICE_HOURS.
+    Download current OHLCV for every ticker, overwriting what is cached.
+    Used by scans so each run reflects the latest prices the API returns.
     Downloads in chunks to stay within yfinance rate limits.
     """
     engine = get_engine()
-    cutoff = datetime.utcnow() - timedelta(hours=CACHE_PRICE_HOURS)
-    stale = []
-    for t in tickers:
-        latest = latest_price_date(t, engine)
-        if force_refresh or latest is None or _is_stale(latest, cutoff):
-            stale.append(t)
-
-    if not stale:
-        log.info("All %d tickers are fresh; skipping download.", len(tickers))
-        return
-
-    log.info("Downloading price history for %d tickers …", len(stale))
-    for chunk in _chunks(stale, YFINANCE_CHUNK):
+    log.info("Downloading price history for %d tickers …", len(tickers))
+    for chunk in _chunks(list(tickers), YFINANCE_CHUNK):
         _download_chunk(chunk, engine)
         time.sleep(0.5)   # be polite to the free API
 
     # Retry pass: a transient lock/timeout can leave a ticker with no rows.
-    # Re-fetch any stale ticker that still has no data, one at a time.
-    missing = [t for t in stale if latest_price_date(t, engine) is None]
+    # Re-fetch any ticker that still has no data, one at a time.
+    missing = [t for t in tickers if latest_price_date(t, engine) is None]
     if missing:
         log.info("Retrying %d tickers that returned no data …", len(missing))
         for t in missing:
@@ -84,8 +72,16 @@ def ensure_prices(tickers: Sequence[str], force_refresh: bool = False) -> None:
             time.sleep(0.3)
 
 
+def ensure_prices(tickers: Sequence[str]) -> None:
+    """Download OHLCV only for tickers that have no cached rows yet."""
+    engine = get_engine()
+    missing = [t for t in tickers if latest_price_date(t, engine) is None]
+    if missing:
+        refresh_prices(missing)
+
+
 def get_price_df(ticker: str) -> pd.DataFrame:
-    """Return a DataFrame of OHLCV for `ticker`, refreshing if needed."""
+    """Return a DataFrame of OHLCV for `ticker`, downloading only if it has never been cached."""
     ensure_prices([ticker])
     return load_prices(ticker, get_engine(), days=PRICE_HISTORY_DAYS)
 
@@ -132,15 +128,6 @@ def get_fundamentals(ticker: str) -> dict:
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
-
-def _is_stale(latest: date, cutoff: datetime) -> bool:
-    """True if the latest data is older than cutoff (market close today counts as fresh)."""
-    latest_dt = datetime.combine(latest, datetime.min.time())
-    # Market data from today is always considered fresh
-    if latest == date.today():
-        return False
-    return latest_dt < cutoff
-
 
 def _chunks(lst: list, n: int):
     for i in range(0, len(lst), n):

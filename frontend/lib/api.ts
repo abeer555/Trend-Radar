@@ -326,8 +326,8 @@ export async function fetchSectors(): Promise<string[]> {
 // Scan control / status
 // ---------------------------------------------------------------------------
 
-export async function triggerScan(forceRefresh = false): Promise<{ status: string; message: string }> {
-  const res = await fetch(`${BASE}/scan?force_refresh=${forceRefresh}`, { method: "POST" });
+export async function triggerScan(): Promise<{ status: string; message: string }> {
+  const res = await fetch(`${BASE}/scan`, { method: "POST" });
   return res.json();
 }
 

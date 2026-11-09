@@ -186,7 +186,7 @@ _scan_running = False
 
 
 @router.post("/scan", response_model=ScanResponse)
-def trigger_scan(background_tasks: BackgroundTasks, force_refresh: bool = False):
+def trigger_scan(background_tasks: BackgroundTasks):
     """
     Kick off a scan in the background.
 
@@ -199,7 +199,7 @@ def trigger_scan(background_tasks: BackgroundTasks, force_refresh: bool = False)
         if _scan_running:
             return ScanResponse(status="already_running", message="A scan is already in progress.")
         _scan_running = True
-        background_tasks.add_task(_run_scan_bg, force_refresh)
+        background_tasks.add_task(_run_scan_bg)
     return ScanResponse(status="started", message="Scan started in background. Check /api/scan/status.")
 
 
@@ -343,8 +343,8 @@ def build_chart_payload(ticker: str, days: int = 365) -> dict[str, Any] | None:
     returns it.  Returns None when there is no price data.
 
     Shared with the static exporter.  NOTE: the underlying get_price_df may
-    trigger a live yfinance download when the local cache is stale — during
-    export right after a scan the cache is fresh, so this stays fully offline.
+    trigger a live yfinance download only when a ticker has never been cached —
+    during export right after a scan every ticker is cached, so this stays offline.
     """
     from app.data.fetcher import get_price_df
     import numpy as np
@@ -495,7 +495,7 @@ def _pct_within(price, high, tolerance: float) -> bool | None:
     return (float(high) - float(price)) / float(high) <= tolerance
 
 
-def _run_scan_bg(force_refresh: bool) -> None:
+def _run_scan_bg() -> None:
     """
     Wrap `run_full_scan` so an exception always:
       1. marks scan_log as failed (see scanner.run_full_scan's own try/except), and
@@ -504,7 +504,7 @@ def _run_scan_bg(force_refresh: bool) -> None:
     global _scan_running
     try:
         from app.scanner import run_full_scan
-        run_full_scan(force_refresh=force_refresh)
+        run_full_scan()
     except Exception:
         import logging
         logging.getLogger(__name__).exception("Background scan crashed")

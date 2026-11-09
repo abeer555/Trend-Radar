@@ -26,7 +26,6 @@ SQLITE_DB_PATH   = os.environ.get("SQLITE_DB_PATH", "market_predictor.db")
 PRICE_HISTORY_DAYS = 380                   # enough for 52-wk + MA200 + buffer
 YFINANCE_CHUNK   = 50                      # tickers per bulk-download call
 YFINANCE_THREADS = 4                       # parallel download threads
-CACHE_PRICE_HOURS = 6                      # skip re-download if data is fresh
 FUNDAMENTALS_CACHE_DAYS = 3               # re-fetch fundamentals every N days
 
 # ---------------------------------------------------------------------------
